@@ -25,6 +25,8 @@ class Dice {
       ...this.availableValues.slice(i + 1),
     ];
 
+    this.value = value;
+
     return value;
   }
 

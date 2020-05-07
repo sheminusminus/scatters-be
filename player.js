@@ -13,6 +13,7 @@ class Player {
     this.rerolls = 1;
     this.ordinal = -1;
     this.answers = [];
+    this.waiting = false;
   }
 
   setAnswers(_answers) {
@@ -21,6 +22,10 @@ class Player {
 
   setOrdinal(ordinal) {
     this.ordinal = ordinal;
+  }
+
+  setWaiting(_waiting) {
+    this.waiting = _waiting;
   }
 }
 

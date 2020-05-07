@@ -2,9 +2,19 @@ const Dice = require('./dice');
 const Player = require('./player');
 
 // const TIMER_MIN = 3;
-const TIMER_MIN = 0.5;
+// const TIMER_MIN = 0.5;
+const TIMER_MIN = 0.2;
 const TIMER_LEN = TIMER_MIN * 60 * 1000;
 const SETS_PER_ROUND = 12;
+
+const GameStatus = {
+  NOT_STARTED: 'NOT_STARTED',
+  PRE_ROLL: 'PRE_ROLL',
+  ROLLING: 'ROLLING',
+  SCORES: 'SCORES',
+  TIMER_ACTIVE: 'TIMER_ACTIVE',
+  VOTING: 'VOTING',
+};
 
 module.exports = class Game {
   constructor(io, roomName) {
@@ -31,6 +41,7 @@ module.exports = class Game {
   }
 
   init() {
+    this.prevPlayers = new Map();
     this.round = 0;
     this.start = 0;
     this.end = 0;
@@ -43,14 +54,18 @@ module.exports = class Game {
     this.gameInProgress = false;
     this.callback = () => {};
     this.roundTallies = 0;
+    this.status = 'NOT_STARTED';
   }
 
   nextRound() {
+    this.gameInProgress = false;
+    this.roundInProgress = false;
     this.round += 1;
     this.start = 0;
     this.end = 0;
     this.inProg = false;
     this.callback = () => {};
+    this.unwaitAllPlayers();
     this.nextTurn();
     this.roundTallies = 0;
   }
@@ -61,7 +76,6 @@ module.exports = class Game {
 
   startGame() {
     this.gameInProgress = true;
-    this.activePlayer = Array.from(this.players.keys())[0];
   }
 
   update() {
@@ -93,6 +107,7 @@ module.exports = class Game {
   startTimer(cb) {
     if (this.inProg) { return; }
     this.inProg = true;
+    this.roundInProgress = true;
     this.callback = cb;
     this.start = Date.now();
     this.end = this.start + TIMER_LEN;
@@ -101,13 +116,13 @@ module.exports = class Game {
 
   addPlayer(id, username) {
     const player = new Player(id, username);
-    const playerExists = this.findPlayer(username);
+    const playerExists = this.findPrevPlayer(username);
 
     if (Boolean(playerExists)) {
       player.score = playerExists.score;
       player.turn = playerExists.turn;
       player.rerolls = playerExists.rerolls;
-      this.removePlayer();
+      this.removePrevPlayer(username);
     }
 
     this.updatePlayer(id, player);
@@ -117,28 +132,73 @@ module.exports = class Game {
     return this.state.find(player => player.username === username);
   }
 
+  findPrevPlayer(username) {
+    return this.prevPlayers.get(username);
+  }
+
   findPlayerById(id) {
     return this.state.find(player => player.id === id);
   }
 
+  findPrevPlayerById(id) {
+    return this.prevState.find(player => player.id === id);
+  }
+
+  removePrevPlayer(username) {
+    this.prevPlayers.delete(username);
+  }
+
   removePlayer(id) {
+    const player = {
+      ...this.findPlayerById(id),
+    };
+
+    this.prevPlayers.set(player.username, player);
+
     this.players.delete(id);
-    if (this.inProg && this.numPlayers === 0) {
+
+    if (this.numPlayers === 0) {
       this.stopTimer();
+      this.init();
+    } else {
+      let idx = 0;
+      this.players.forEach((player) => {
+        player.ordinal = idx;
+        idx += 1;
+      });
+      if (this.activePlayer === id) {
+        this.nextTurn();
+      }
     }
   }
 
   updatePlayer(id, player) {
     this.players.set(id, player);
 
+    if (this.roundInProgress) {
+      player.setWaiting(true);
+    }
+
     Array.from(this.players.values()).forEach((p, idx) => {
       if (p.id === id) {
         player.setOrdinal(idx);
       }
     });
+
+    if (!this.activePlayer || !this.findPlayerById(id)) {
+      this.activePlayer = id;
+    }
+  }
+
+  unwaitAllPlayers() {
+    this.players.forEach((player) => {
+      player.setWaiting(false);
+      this.players.set(player.id, player);
+    });
   }
 
   nextTurn() {
+    this.unwaitAllPlayers();
     const playerIds = Array.from(this.players.keys());
     let activeIndex = playerIds.indexOf(this.activePlayer);
     if (activeIndex === this.numPlayers - 1) {
@@ -180,47 +240,6 @@ module.exports = class Game {
     }, []);
   }
 
-  // talliesToScores(tallies, callback) {
-  //   Object.keys(tallies).forEach((playerId) => {
-  //     const roundTallies = tallies[playerId];
-  //     const scoreTallies = [];
-  //     roundTallies.forEach((vote) => {
-  //       scoreTallies.push();
-  //     });
-  //     const player = this.findPlayerById(playerId);
-  //     player.setScores.push(roundTallies);
-  //     this.roundTallies += 1;
-  //   });
-  //
-  //   console.log('numPlayers', this.numPlayers, 'players', this.players, 'ROUND TALLIES', this.roundTallies);
-  //   if (this.roundTallies === this.numPlayers) {
-  //     this.state.forEach((player) => {
-  //       let roundScore = 0;
-  //
-  //       console.log('player', player);
-  //       for (let i = 0; i < this.numPlayers; i += 1) {
-  //         let setScore = 0;
-  //
-  //         for (let j = 0; j < SETS_PER_ROUND; j += 1) {
-  //           const score = player.setScores[j][i];
-  //           console.log('score', score);
-  //           setScore += score;
-  //         }
-  //
-  //         if (setScore > 0) {
-  //           roundScore += 1;
-  //         }
-  //       }
-  //
-  //       player.roundScores.push(roundScore);
-  //       player.score += roundScore;
-  //       player.setScores = [];
-  //     });
-  //
-  //     callback();
-  //   }
-  // }
-
   talliesToScores(tallies, callback) {
     Object.keys(tallies).forEach((playerId) => {
       const roundTallies = tallies[playerId];
@@ -230,14 +249,14 @@ module.exports = class Game {
 
     this.roundTallies += 1;
 
-    if (this.roundTallies === this.numPlayers) {
-      this.state.forEach((player) => {
+    if (this.roundTallies === this.numPlayersNotWaiting) {
+      this.playersNotWaiting.forEach((player) => {
         let roundScore = 0;
 
         for (let i = 0; i < SETS_PER_ROUND; i += 1) {
           let setScore = 0;
 
-          for (let j = 0; j < this.numPlayers; j += 1) {
+          for (let j = 0; j < this.numPlayersNotWaiting; j += 1) {
             const score = player.setScores[j][i];
             setScore += score;
           }
@@ -257,8 +276,20 @@ module.exports = class Game {
     }
   }
 
+  get numPlayersNotWaiting() {
+    return this.playersNotWaiting.length;
+  }
+
   get numPlayers() {
     return [...this.players.values()].length;
+  }
+
+  get prevState() {
+    return [...this.prevPlayers.values()];
+  }
+
+  get playersNotWaiting() {
+    return this.state.filter((p) => !p.waiting);
   }
 
   get state() {

@@ -28,6 +28,7 @@ const events = {
   DICE_ROLLED: 'dice-rolled',
   EMIT_NAME: 'name',
   GAME_STARTED: 'game-started',
+  GET_STATUS: 'get-status',
   GOT_RESPONSES: 'got-responses',
   DICE_ROLL_RESET: 'dice-roll-reset',
   JOINED_ROOM: 'joined-room',
@@ -42,7 +43,9 @@ const events = {
   SEND_TALLIES: 'send-tallies',
   START_GAME: 'start-game',
   START_ROUND: 'start-round',
+  GAME_STATUS: 'game-status',
   TIMER_FIRED: 'timer-fired',
+  WAIT_NEXT_ROUND: 'wait-next-round',
 };
 
 games[defaultRoomName] = new Game(scatters, defaultRoomName);
@@ -59,9 +62,14 @@ const makeHandleJoinRoom = (socket, roomName) => () => {
   });
 
   socket.to(defaultRoomName).emit(events.PLAYERS_UPDATED, {
+    activePlayer: defaultGame.activePlayer,
     name: socket.username,
     players: defaultGame.state,
   });
+
+  if (defaultGame.roundInProgress) {
+    socket.emit(events.WAIT_NEXT_ROUND);
+  }
 };
 
 const makeHandleName = (socket) => (data) => {
@@ -70,12 +78,6 @@ const makeHandleName = (socket) => (data) => {
   socket.room = defaultRoomName;
 
   const handleJoinRoom = makeHandleJoinRoom(socket, data.room);
-
-  const existingPlayer = defaultGame.findPlayer(data.name);
-
-  if (existingPlayer) {
-    return;
-  }
 
   socket.join(defaultRoomName, handleJoinRoom);
 };
@@ -139,7 +141,7 @@ const makeHandleSendAnswers = (socket) => (data) => {
 
   const responses = defaultGame.setPlayerAnswers(socket.id, answers);
 
-  if (responses.length === defaultGame.numPlayers) {
+  if (responses.length === defaultGame.numPlayersNotWaiting) {
     console.log('got all responses', responses);
 
     scatters.to(defaultRoomName).emit(events.GOT_RESPONSES, {
@@ -168,6 +170,22 @@ const makeHandleNextRound = (socket) => (data) => {
   console.log(defaultGame.activePlayer);
   scatters.to(defaultRoomName).emit(events.NEXT_ROUND, {
     activePlayer: defaultGame.activePlayer,
+    players: defaultGame.state,
+  });
+};
+
+const makeHandleGetStatus = (socket) => (data) => {
+  console.log('game status requested');
+
+  const inProgress = defaultGame.gameInProgress;
+  const roundInProgress = defaultGame.roundInProgress;
+
+  socket.emit(events.GAME_STATUS, {
+    activePlayer: defaultGame.activePlayer,
+    inProgress,
+    players: defaultGame.state,
+    roll: defaultGame.dice.value,
+    roundInProgress,
   });
 };
 
@@ -188,6 +206,7 @@ const handleConnection = (socket) => {
   const handleSendAnswers = makeHandleSendAnswers(socket);
   const handleSendTallies = makeHandleSendTallies(socket);
   const handleNextRound = makeHandleNextRound(socket);
+  const handleGetStatus = makeHandleGetStatus(socket);
   const handleDisconnect = makeHandleDisconnect(socket);
 
   socket.on(events.EMIT_NAME, handleName);
@@ -205,6 +224,8 @@ const handleConnection = (socket) => {
   socket.on(events.SEND_TALLIES, handleSendTallies);
 
   socket.on(events.NEXT_ROUND, handleNextRound);
+
+  socket.on(events.GET_STATUS, handleGetStatus);
 
   socket.on('disconnect', handleDisconnect);
 };
