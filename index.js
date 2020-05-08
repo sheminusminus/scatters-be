@@ -179,6 +179,8 @@ const makeHandleNextRound = (socket) => (data) => {
 const makeHandleGetStatus = (socket) => (data) => {
   console.log('game status requested');
 
+  defaultGame.unwaitAllPlayers();
+
   const activePlayer = defaultGame.activePlayer;
   const currentList = defaultGame.round;
   const inProgress = defaultGame.gameInProgress;

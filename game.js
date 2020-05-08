@@ -60,11 +60,7 @@ module.exports = class Game {
   set phase(val) {
     this._phase = val;
 
-    this.playersWaiting.forEach((p) => {
-      const player = this.players.get(p.id);
-      player.setWaiting(false);
-      this.players.set(p.id, player);
-    });
+    // this.unwaitAllPlayers();
 
     Object.keys(this.phaseListeners).forEach((id) => {
       this.phaseListeners[id](val);
@@ -222,9 +218,10 @@ module.exports = class Game {
   }
 
   unwaitAllPlayers() {
-    this.players.forEach((player) => {
+    this.playersWaiting.forEach((p) => {
+      const player = this.players.get(p.id);
       player.setWaiting(false);
-      this.players.set(player.id, player);
+      this.players.set(p.id, player);
     });
   }
 
