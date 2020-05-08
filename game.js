@@ -6,6 +6,7 @@ const Player = require('./player');
 const TIMER_MIN = 0.2;
 const TIMER_LEN = TIMER_MIN * 60 * 1000;
 const SETS_PER_ROUND = 12;
+const TIMER_INTERVAL = 250;
 
 const GamePhase = require('./constants').GamePhase;
 
@@ -58,6 +59,13 @@ module.exports = class Game {
 
   set phase(val) {
     this._phase = val;
+
+    this.playersWaiting.forEach((p) => {
+      const player = this.players.get(p.id);
+      player.setWaiting(false);
+      this.players.set(p.id, player);
+    });
+
     Object.keys(this.phaseListeners).forEach((id) => {
       this.phaseListeners[id](val);
     });
@@ -82,6 +90,7 @@ module.exports = class Game {
     this.unwaitAllPlayers();
     this.nextTurn();
     this.roundTallies = 0;
+    this.phase = GamePhase.ROLL;
   }
 
   endGame() {
@@ -99,9 +108,8 @@ module.exports = class Game {
     const remaining = this.end - now;
 
     if (remaining > 0) {
-      console.log('remaining', remaining);
       this.callback(remaining);
-      setTimeout(this.update, 1000);
+      setTimeout(this.update, TIMER_INTERVAL);
     } else {
       console.log('buzz!!', remaining);
       this.callback(0);
@@ -110,7 +118,11 @@ module.exports = class Game {
   }
 
   stopTimer() {
-    this.phase = GamePhase.VOTE;
+    if (this.numPlayers === 0) {
+      this.phase = GamePhase.NOT_STARTED;
+    } else {
+      this.phase = GamePhase.VOTE;
+    }
     this.start = 0;
     this.end = 0;
     this.t = 0;
@@ -312,6 +324,10 @@ module.exports = class Game {
 
   get playersNotWaiting() {
     return this.state.filter((p) => !p.waiting);
+  }
+
+  get playersWaiting() {
+    return this.state.filter((p) => p.waiting);
   }
 
   get state() {

@@ -179,16 +179,21 @@ const makeHandleNextRound = (socket) => (data) => {
 const makeHandleGetStatus = (socket) => (data) => {
   console.log('game status requested');
 
-  const phase = defaultGame.phase;
+  const activePlayer = defaultGame.activePlayer;
+  const currentList = defaultGame.round;
   const inProgress = defaultGame.gameInProgress;
+  const phase = defaultGame.phase;
+  const players = defaultGame.state;
+  const roll = defaultGame.dice.value;
   const roundInProgress = defaultGame.roundInProgress;
 
   socket.emit(events.GAME_STATUS, {
-    activePlayer: defaultGame.activePlayer,
+    activePlayer,
+    currentList,
     inProgress,
     phase,
-    players: defaultGame.state,
-    roll: defaultGame.dice.value,
+    players,
+    roll,
     roundInProgress,
   });
 };
