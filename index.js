@@ -54,7 +54,9 @@ const defaultGame = games[defaultRoomName];
 const makeHandleJoinRoom = (socket, roomName) => () => {
   defaultGame.addPlayer(socket.id, socket.username, socket);
 
+  console.log(defaultGame.activePlayer);
   socket.emit(events.JOINED_ROOM, {
+    activePlayer: defaultGame.activePlayer,
     id: socket.id,
     name: socket.username,
     players: defaultGame.state,
@@ -177,12 +179,14 @@ const makeHandleNextRound = (socket) => (data) => {
 const makeHandleGetStatus = (socket) => (data) => {
   console.log('game status requested');
 
+  const phase = defaultGame.phase;
   const inProgress = defaultGame.gameInProgress;
   const roundInProgress = defaultGame.roundInProgress;
 
   socket.emit(events.GAME_STATUS, {
     activePlayer: defaultGame.activePlayer,
     inProgress,
+    phase,
     players: defaultGame.state,
     roll: defaultGame.dice.value,
     roundInProgress,
@@ -226,6 +230,8 @@ const handleConnection = (socket) => {
   socket.on(events.NEXT_ROUND, handleNextRound);
 
   socket.on(events.GET_STATUS, handleGetStatus);
+
+  defaultGame.registerPhaseListener(socket.id, handleGetStatus);
 
   socket.on('disconnect', handleDisconnect);
 };

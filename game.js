@@ -7,36 +7,31 @@ const TIMER_MIN = 0.2;
 const TIMER_LEN = TIMER_MIN * 60 * 1000;
 const SETS_PER_ROUND = 12;
 
-const GameStatus = {
-  NOT_STARTED: 'NOT_STARTED',
-  PRE_ROLL: 'PRE_ROLL',
-  ROLLING: 'ROLLING',
-  SCORES: 'SCORES',
-  TIMER_ACTIVE: 'TIMER_ACTIVE',
-  VOTING: 'VOTING',
-};
+const GamePhase = require('./constants').GamePhase;
 
 module.exports = class Game {
   constructor(io, roomName) {
     this.io = io;
     this.players = new Map();
     this.room = roomName;
+    this.phaseListeners = {};
     this.init = this.init.bind(this);
-    this.update = this.update.bind(this);
-    this.startTimer = this.startTimer.bind(this);
-    this.stopTimer = this.stopTimer.bind(this);
-    this.startGame = this.startGame.bind(this);
-    this.endGame = this.endGame.bind(this);
     this.addPlayer = this.addPlayer.bind(this);
+    this.endGame = this.endGame.bind(this);
     this.findPlayer = this.findPlayer.bind(this);
     this.findPlayerById = this.findPlayerById.bind(this);
-    this.removePlayer = this.removePlayer.bind(this);
-    this.updatePlayer = this.updatePlayer.bind(this);
     this.nextTurn = this.nextTurn.bind(this);
-    this.rollDice = this.rollDice.bind(this);
-    this.setPlayerAnswers = this.setPlayerAnswers.bind(this);
+    this.removePlayer = this.removePlayer.bind(this);
     this.resetDiceRoll = this.resetDiceRoll.bind(this);
+    this.rollDice = this.rollDice.bind(this);
+    this.registerPhaseListener = this.registerPhaseListener.bind(this);
+    this.setPlayerAnswers = this.setPlayerAnswers.bind(this);
+    this.startGame = this.startGame.bind(this);
+    this.startTimer = this.startTimer.bind(this);
+    this.stopTimer = this.stopTimer.bind(this);
     this.talliesToScores = this.talliesToScores.bind(this);
+    this.update = this.update.bind(this);
+    this.updatePlayer = this.updatePlayer.bind(this);
     this.init();
   }
 
@@ -54,7 +49,26 @@ module.exports = class Game {
     this.gameInProgress = false;
     this.callback = () => {};
     this.roundTallies = 0;
-    this.status = 'NOT_STARTED';
+    this._phase = GamePhase.NOT_STARTED;
+  }
+
+  get phase() {
+    return this._phase;
+  }
+
+  set phase(val) {
+    this._phase = val;
+    Object.keys(this.phaseListeners).forEach((id) => {
+      this.phaseListeners[id](val);
+    });
+  }
+
+  registerPhaseListener(id, callback) {
+    this.phaseListeners[id] = callback;
+  }
+
+  unRegisterPhaseListener(id) {
+    delete this.phaseListeners[id];
   }
 
   nextRound() {
@@ -76,6 +90,7 @@ module.exports = class Game {
 
   startGame() {
     this.gameInProgress = true;
+    this.phase = GamePhase.ROLL;
   }
 
   update() {
@@ -95,6 +110,7 @@ module.exports = class Game {
   }
 
   stopTimer() {
+    this.phase = GamePhase.VOTE;
     this.start = 0;
     this.end = 0;
     this.t = 0;
@@ -107,6 +123,7 @@ module.exports = class Game {
   startTimer(cb) {
     if (this.inProg) { return; }
     this.inProg = true;
+    this.phase = GamePhase.LIST;
     this.roundInProgress = true;
     this.callback = cb;
     this.start = Date.now();
@@ -155,6 +172,8 @@ module.exports = class Game {
 
     this.prevPlayers.set(player.username, player);
 
+    this.unRegisterPhaseListener(id);
+
     this.players.delete(id);
 
     if (this.numPlayers === 0) {
@@ -185,7 +204,7 @@ module.exports = class Game {
       }
     });
 
-    if (!this.activePlayer || !this.findPlayerById(id)) {
+    if (!this.activePlayer) {
       this.activePlayer = id;
     }
   }
@@ -210,6 +229,7 @@ module.exports = class Game {
   }
 
   rollDice() {
+    this.phase = GamePhase.ROLL;
     return this.dice.roll();
   }
 
@@ -250,6 +270,8 @@ module.exports = class Game {
     this.roundTallies += 1;
 
     if (this.roundTallies === this.numPlayersNotWaiting) {
+      this.phase = GamePhase.SCORES;
+
       this.playersNotWaiting.forEach((player) => {
         let roundScore = 0;
 
