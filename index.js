@@ -25,12 +25,13 @@ const listener = server.listen(process.env.PORT, () => {
 const events = {
   CONNECT: 'connect',
   CONNECT_ERROR: 'connect_error',
+  DICE_ROLL_RESET: 'dice-roll-reset',
   DICE_ROLLED: 'dice-rolled',
   EMIT_NAME: 'name',
   GAME_STARTED: 'game-started',
+  GAME_STATUS: 'game-status',
   GET_STATUS: 'get-status',
   GOT_RESPONSES: 'got-responses',
-  DICE_ROLL_RESET: 'dice-roll-reset',
   JOINED_ROOM: 'joined-room',
   NEXT_ROUND: 'next-round',
   PLAYERS_UPDATED: 'players-updated',
@@ -38,12 +39,13 @@ const events = {
   ROLL_DICE: 'roll-dice',
   ROUND_ENDED: 'round-ended',
   ROUND_SCORED: 'round-scored',
+  ROUND_SET: 'round-set',
   ROUND_STARTED: 'round-started',
   SEND_ANSWERS: 'send-answers',
   SEND_TALLIES: 'send-tallies',
+  SET_ROUND: 'set-round',
   START_GAME: 'start-game',
   START_ROUND: 'start-round',
-  GAME_STATUS: 'game-status',
   TIMER_FIRED: 'timer-fired',
   WAIT_NEXT_ROUND: 'wait-next-round',
 };
@@ -176,6 +178,18 @@ const makeHandleNextRound = (socket) => (data) => {
   });
 };
 
+const makeHandleSetRound = (socket) => (data) => {
+  console.log('set round requested', data);
+
+  defaultGame.setRound(data.round);
+
+  scatters.to(defaultRoomName).emit(events.ROUND_SET, {
+    activePlayer: defaultGame.activePlayer,
+    currentList: defaultGame.getRound(),
+    players: defaultGame.state,
+  });
+};
+
 const makeHandleGetStatus = (socket) => (data) => {
   console.log('game status requested');
 
@@ -218,6 +232,7 @@ const handleConnection = (socket) => {
   const handleSendTallies = makeHandleSendTallies(socket);
   const handleNextRound = makeHandleNextRound(socket);
   const handleGetStatus = makeHandleGetStatus(socket);
+  const handleSetRound = makeHandleSetRound(socket);
   const handleDisconnect = makeHandleDisconnect(socket);
 
   socket.on(events.EMIT_NAME, handleName);
@@ -237,6 +252,8 @@ const handleConnection = (socket) => {
   socket.on(events.NEXT_ROUND, handleNextRound);
 
   socket.on(events.GET_STATUS, handleGetStatus);
+
+  socket.on(events.SET_ROUND, handleSetRound);
 
   defaultGame.registerPhaseListener(socket.id, handleGetStatus);
 

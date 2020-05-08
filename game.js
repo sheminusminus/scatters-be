@@ -75,6 +75,16 @@ module.exports = class Game {
     delete this.phaseListeners[id];
   }
 
+  getRound() {
+    return this.round;
+  }
+
+  setRound(round) {
+    if (this.phase === GamePhase.NOT_STARTED) {
+      this.round = round;
+    }
+  }
+
   nextRound() {
     this.gameInProgress = false;
     this.roundInProgress = false;
