@@ -63,7 +63,9 @@ module.exports = class Game {
     // this.unwaitAllPlayers();
 
     Object.keys(this.phaseListeners).forEach((id) => {
-      this.phaseListeners[id](val);
+      this.phaseListeners[id]({
+        room: this.room,
+      });
     });
   }
 
@@ -281,9 +283,14 @@ module.exports = class Game {
 
   talliesToScores(tallies, callback) {
     Object.keys(tallies).forEach((playerId) => {
+      console.log('tallying: playerId', playerId);
       const roundTallies = tallies[playerId];
       const player = this.findPlayerById(playerId);
-      player.setScores.push(roundTallies);
+      console.log('tallying: state', this.state, player);
+      console.log('tallying: player', player);
+      if (player) {
+        player.setScores.push(roundTallies);
+      }
     });
 
     this.roundTallies += 1;
@@ -302,7 +309,17 @@ module.exports = class Game {
             setScore += score;
           }
           if (setScore > 0) {
+            let alliterationScore = 0;
+            const answer = player.answers[i];
+            const words = answer.split(' ');
+            words.forEach((w, idx) => {
+              const char = w[0];
+              if (char.toLowerCase() === this.dice.value.toLowerCase() && idx > 0) {
+                alliterationScore += 1;
+              }
+            });
             roundScore += 1;
+            roundScore += alliterationScore;
           }
         }
 

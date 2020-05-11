@@ -8,15 +8,16 @@ const server = require('http').Server(app);
 const io = require('socket.io')(server);
 
 const Game = require('./game');
+const Manager = require('./manager');
 
 const scatters = io.of('/scatters');
 
 const defaultRoomName = process.env.ROOM_NAME;
 
-const rooms = {
-  [defaultRoomName]: scatters,
-};
-const games = {};
+// const rooms = {
+//   [defaultRoomName]: scatters,
+// };
+// const games = {};
 
 const listener = server.listen(process.env.PORT, () => {
   console.log('Your app is listening on port ' + listener.address().port);
@@ -31,10 +32,12 @@ const events = {
   GAME_STARTED: 'game-started',
   GAME_STATUS: 'game-status',
   GET_STATUS: 'get-status',
+  ROOMS_JOINED: 'rooms-joined',
   GOT_RESPONSES: 'got-responses',
   JOINED_ROOM: 'joined-room',
   NEXT_ROUND: 'next-round',
   PLAYERS_UPDATED: 'players-updated',
+  REQUEST_ROOM: 'request-room',
   RESET_DICE_ROLL: 'reset-dice-roll',
   ROLL_DICE: 'roll-dice',
   ROUND_ENDED: 'round-ended',
@@ -50,90 +53,133 @@ const events = {
   WAIT_NEXT_ROUND: 'wait-next-round',
 };
 
-games[defaultRoomName] = new Game(scatters, defaultRoomName);
-const defaultGame = games[defaultRoomName];
+const manager = new Manager();
 
-const makeHandleJoinRoom = (socket, roomName) => () => {
-  defaultGame.addPlayer(socket.id, socket.username, socket);
+const handleRoomJoined = (socket, roomName) => () => {
+  const room = manager.findRoom(roomName);
 
-  console.log(defaultGame.activePlayer);
   socket.emit(events.JOINED_ROOM, {
-    activePlayer: defaultGame.activePlayer,
+    activePlayer: room.activePlayer,
     id: socket.id,
     name: socket.username,
-    players: defaultGame.state,
-    room: defaultRoomName,
+    players: room.state,
+    room: roomName,
   });
 
-  socket.to(defaultRoomName).emit(events.PLAYERS_UPDATED, {
-    activePlayer: defaultGame.activePlayer,
+  socket.to(roomName).emit(events.PLAYERS_UPDATED, {
+    activePlayer: room.activePlayer,
     name: socket.username,
-    players: defaultGame.state,
+    players: room.state,
   });
 
-  if (defaultGame.roundInProgress) {
+  if (room.roundInProgress) {
     socket.emit(events.WAIT_NEXT_ROUND);
   }
 };
 
-const makeHandleName = (socket) => (data) => {
-  console.log('handling name', defaultRoomName, data);
-  socket.username = data.name;
-  socket.room = defaultRoomName;
+const makeHandleRoom = (socket) => (data) => {
+  const { room: roomName } = data;
 
-  const handleJoinRoom = makeHandleJoinRoom(socket, data.room);
+  let foundRoom;
 
-  socket.join(defaultRoomName, handleJoinRoom);
+  if (roomName) {
+    foundRoom = manager.findRoom(roomName);
+  }
+
+  if (!foundRoom) {
+    foundRoom = manager.createRoom(scatters, roomName);
+  }
+
+  if (foundRoom) {
+    const handleGetStatus = makeHandleGetStatus(socket);
+    socket.room = foundRoom.name;
+    const handleJoinRoom = handleRoomJoined(socket, foundRoom.name);
+    socket.join(foundRoom.name, handleJoinRoom);
+    manager.addPlayerToRoom(foundRoom.name, socket.id, name);
+    foundRoom.registerPhaseListener(socket.id, handleGetStatus);
+  }
 };
 
-const makeHandleStartGame = (socket) => () => {
-  console.log('start game');
-  defaultGame.startGame();
+const makeHandleName = (socket) => (data) => {
+  const { name } = data;
 
-  scatters.to(defaultRoomName).emit(events.GAME_STARTED, {
-    activePlayer: defaultGame.activePlayer,
+  socket.username = name;
+
+  const rooms = socket.rooms;
+
+  socket.emit(events.ROOMS_JOINED, {
+    name: socket.username,
+    rooms,
   });
 };
 
-const handleTimerFire = (timeLeft) => {
-  scatters.to(defaultRoomName).emit(events.TIMER_FIRED, {
+const makeHandleStartGame = (socket) => (data) => {
+  console.log('start game', data);
+
+  const { room: roomName } = data;
+
+  const room = manager.findRoom(roomName);
+
+  room.startGame();
+
+  scatters.to(room.name).emit(events.GAME_STARTED, {
+    activePlayer: room.activePlayer,
+  });
+};
+
+const handleTimerFire = (roomName) => (timeLeft) => {
+  const room = manager.findRoom(roomName);
+
+  scatters.to(room.name).emit(events.TIMER_FIRED, {
     timeLeft,
-    startTime: defaultGame.start,
-    endTime: defaultGame.end,
+    startTime: room.start,
+    endTime: room.end,
   });
 
   if (timeLeft <= 0) {
-    scatters.to(defaultRoomName).emit(events.ROUND_ENDED);
+    scatters.to(room.name).emit(events.ROUND_ENDED);
   }
 };
 
-const handleStartRound = () => {
-  defaultGame.startTimer(handleTimerFire);
+const handleStartRound = (data) => {
+  const { room: roomName } = data;
 
-  scatters.to(defaultRoomName).emit(events.ROUND_STARTED, {
-    startTime: defaultGame.start,
-    endTime: defaultGame.end,
+  const timerFired = handleTimerFire(roomName);
+
+  const room = manager.findRoom(roomName);
+
+  room.startTimer(timerFired);
+
+  scatters.to(room.name).emit(events.ROUND_STARTED, {
+    startTime: room.start,
+    endTime: room.end,
   });
 };
 
-const makeHandleResetDiceRoll = (socket) => () => {
+const makeHandleResetDiceRoll = (socket) => (data) => {
   console.log('reset dice roll requested');
+  const { room: roomName } = data;
 
-  defaultGame.resetDiceRoll();
+  const room = manager.findRoom(roomName);
 
-  scatters.to(defaultRoomName).emit(events.DICE_ROLL_RESET);
+  room.resetDiceRoll();
+
+  scatters.to(room.name).emit(events.DICE_ROLL_RESET);
 };
 
-const makeHandleRollDice = (socket) => () => {
+const makeHandleRollDice = (socket) => (data) => {
   console.log('dice roll requested');
+  const { room: roomName } = data;
 
-  if (socket.id !== defaultGame.activePlayer) {
+  const room = manager.findRoom(roomName);
+
+  if (socket.id !== room.activePlayer) {
     return;
   }
 
-  const roll = defaultGame.rollDice();
+  const roll = room.rollDice();
 
-  scatters.to(defaultRoomName).emit(events.DICE_ROLLED, {
+  scatters.to(room.name).emit(events.DICE_ROLLED, {
     roll,
   });
 };
@@ -141,14 +187,16 @@ const makeHandleRollDice = (socket) => () => {
 const makeHandleSendAnswers = (socket) => (data) => {
   console.log('got answers for socket: ', socket.id);
 
-  const { answers } = data;
+  const { answers, room: roomName } = data;
 
-  const responses = defaultGame.setPlayerAnswers(socket.id, answers);
+  const room = manager.findRoom(roomName);
 
-  if (responses.length === defaultGame.numPlayersNotWaiting) {
+  const responses = room.setPlayerAnswers(socket.id, answers);
+
+  if (responses.length === room.numPlayersNotWaiting) {
     console.log('got all responses', responses);
 
-    scatters.to(defaultRoomName).emit(events.GOT_RESPONSES, {
+    scatters.to(room.name).emit(events.GOT_RESPONSES, {
       responses,
     });
   }
@@ -156,52 +204,65 @@ const makeHandleSendAnswers = (socket) => (data) => {
 
 const makeHandleSendTallies = (socket) => (data) => {
   console.log('got tallies for socket: ', socket.id, data);
+  const { room: roomName, tallies } = data;
 
-  defaultGame.talliesToScores(data, () => {
-    console.log('round scored', defaultGame.state);
+  const room = manager.findRoom(roomName);
 
-    scatters.to(defaultRoomName).emit(events.ROUND_SCORED, {
-      players: defaultGame.state,
+  room.talliesToScores(tallies, () => {
+    console.log('round scored', room.state);
+
+    scatters.to(room.name).emit(events.ROUND_SCORED, {
+      players: room.state,
     });
   });
 };
 
 const makeHandleNextRound = (socket) => (data) => {
   console.log('next round requested');
+  const { room: roomName } = data;
 
-  defaultGame.nextRound();
+  const room = manager.findRoom(roomName);
 
-  console.log(defaultGame.activePlayer);
-  scatters.to(defaultRoomName).emit(events.NEXT_ROUND, {
-    activePlayer: defaultGame.activePlayer,
-    players: defaultGame.state,
+  room.nextRound();
+
+  console.log(room.activePlayer);
+
+  scatters.to(room.name).emit(events.NEXT_ROUND, {
+    activePlayer: room.activePlayer,
+    players: room.state,
   });
 };
 
 const makeHandleSetRound = (socket) => (data) => {
   console.log('set round requested', data);
+  const { room: roomName } = data;
 
-  defaultGame.setRound(data.round);
+  const room = manager.findRoom(roomName);
 
-  scatters.to(defaultRoomName).emit(events.ROUND_SET, {
-    activePlayer: defaultGame.activePlayer,
-    currentList: defaultGame.getRound(),
-    players: defaultGame.state,
+  room.setRound(data.round);
+
+  scatters.to(room.name).emit(events.ROUND_SET, {
+    activePlayer: room.activePlayer,
+    currentList: room.getRound(),
+    players: room.state,
   });
 };
 
 const makeHandleGetStatus = (socket) => (data) => {
   console.log('game status requested');
+  const { room: roomName } = data;
 
-  defaultGame.unwaitAllPlayers();
+  const room = manager.findRoom(roomName);
 
-  const activePlayer = defaultGame.activePlayer;
-  const currentList = defaultGame.round;
-  const inProgress = defaultGame.gameInProgress;
-  const phase = defaultGame.phase;
-  const players = defaultGame.state;
-  const roll = defaultGame.dice.value;
-  const roundInProgress = defaultGame.roundInProgress;
+  room.unwaitAllPlayers();
+
+  const activePlayer = room.activePlayer;
+  const currentList = room.getRound();
+  const inProgress = room.gameInProgress;
+  const phase = room.phase;
+  const players = room.state;
+  const roll = room.dice.value;
+  const roundInProgress = room.roundInProgress;
 
   socket.emit(events.GAME_STATUS, {
     activePlayer,
@@ -214,17 +275,22 @@ const makeHandleGetStatus = (socket) => (data) => {
   });
 };
 
-const makeHandleDisconnect = (socket) => () => {
-  defaultGame.removePlayer(socket.id);
-
-  scatters.to(defaultRoomName).emit('player-left', {
-    name: socket.username,
-    state: defaultGame.state,
-  });
+const makeHandleDisconnect = (socket) => (data) => {
+  // const { room: roomName } = data;
+  //
+  // const room = manager.findRoom(roomName);
+  //
+  // room.removePlayer(socket.id);
+  //
+  // scatters.to(room.name).emit('player-left', {
+  //   name: socket.username,
+  //   state: room.state,
+  // });
 };
 
 const handleConnection = (socket) => {
   const handleName = makeHandleName(socket);
+  const handleRoom = makeHandleRoom(socket);
   const handleStartGame = makeHandleStartGame(socket);
   const handleResetDiceRoll = makeHandleResetDiceRoll(socket);
   const handleRollDice = makeHandleRollDice(socket);
@@ -236,6 +302,8 @@ const handleConnection = (socket) => {
   const handleDisconnect = makeHandleDisconnect(socket);
 
   socket.on(events.EMIT_NAME, handleName);
+
+  socket.on(events.REQUEST_ROOM, handleRoom);
 
   socket.on(events.START_GAME, handleStartGame);
 
@@ -254,8 +322,6 @@ const handleConnection = (socket) => {
   socket.on(events.GET_STATUS, handleGetStatus);
 
   socket.on(events.SET_ROUND, handleSetRound);
-
-  defaultGame.registerPhaseListener(socket.id, handleGetStatus);
 
   socket.on('disconnect', handleDisconnect);
 };
