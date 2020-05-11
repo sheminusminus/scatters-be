@@ -155,14 +155,16 @@ module.exports = class Game {
     const player = new Player(id, username);
     const playerExists = this.findPrevPlayer(username);
 
-    if (Boolean(playerExists)) {
-      player.score = playerExists.score;
-      player.turn = playerExists.turn;
-      player.rerolls = playerExists.rerolls;
-      this.removePrevPlayer(username);
-    }
+    console.log(player, playerExists);
 
-    this.updatePlayer(id, player);
+    if (playerExists) {
+      playerExists.id = player.id;
+      this.removePlayerByName(username);
+      this.removePrevPlayer(username);
+      this.updatePlayer(playerExists.id, playerExists);
+    } else {
+      this.updatePlayer(id, player);
+    }
   }
 
   findPlayer(username) {
@@ -185,14 +187,40 @@ module.exports = class Game {
     this.prevPlayers.delete(username);
   }
 
-  removePlayer(id) {
-    const player = {
-      ...this.findPlayerById(id),
-    };
+  removePlayer(id, addToPrevPlayers = true) {
+    const player = this.findPlayerById(id);
 
-    this.prevPlayers.set(player.username, player);
+    if (addToPrevPlayers) {
+      this.prevPlayers.set(player.username, player);
+    }
 
     this.unRegisterPhaseListener(id);
+
+    this.players.delete(id);
+
+    if (this.numPlayers === 0) {
+      this.stopTimer();
+      this.init();
+    } else {
+      let idx = 0;
+      this.players.forEach((player) => {
+        player.ordinal = idx;
+        idx += 1;
+      });
+      if (this.activePlayer === id) {
+        this.nextTurn();
+      }
+    }
+  }
+
+  removePlayerByName(username, addToPrevPlayers = true) {
+    const player = this.findPlayer(username);
+
+    if (addToPrevPlayers) {
+      this.prevPlayers.set(username, player);
+    }
+
+    this.unRegisterPhaseListener(player.id);
 
     this.players.delete(id);
 

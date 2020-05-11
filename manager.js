@@ -31,7 +31,10 @@ module.exports = class Manager {
     return this.state.filter((room) => {
       const playerInRoom = room.findPlayer(username);
       return Boolean(playerInRoom);
-    });
+    }).reduce((obj, room) => ({
+      ...obj,
+      [room.name]: room.name,
+    }), {});
   }
 
   addPlayerToRoom(_room, id, username) {

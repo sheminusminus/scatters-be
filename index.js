@@ -32,7 +32,6 @@ const events = {
   GAME_STARTED: 'game-started',
   GAME_STATUS: 'game-status',
   GET_STATUS: 'get-status',
-  ROOMS_JOINED: 'rooms-joined',
   GOT_RESPONSES: 'got-responses',
   JOINED_ROOM: 'joined-room',
   NEXT_ROUND: 'next-round',
@@ -40,6 +39,7 @@ const events = {
   REQUEST_ROOM: 'request-room',
   RESET_DICE_ROLL: 'reset-dice-roll',
   ROLL_DICE: 'roll-dice',
+  ROOMS_JOINED: 'rooms-joined',
   ROUND_ENDED: 'round-ended',
   ROUND_SCORED: 'round-scored',
   ROUND_SET: 'round-set',
@@ -92,10 +92,9 @@ const makeHandleRoom = (socket) => (data) => {
 
   if (foundRoom) {
     const handleGetStatus = makeHandleGetStatus(socket);
-    socket.room = foundRoom.name;
     const handleJoinRoom = handleRoomJoined(socket, foundRoom.name);
+    manager.addPlayerToRoom(foundRoom.name, socket.id, socket.username);
     socket.join(foundRoom.name, handleJoinRoom);
-    manager.addPlayerToRoom(foundRoom.name, socket.id, name);
     foundRoom.registerPhaseListener(socket.id, handleGetStatus);
   }
 };
@@ -105,11 +104,15 @@ const makeHandleName = (socket) => (data) => {
 
   socket.username = name;
 
-  const rooms = socket.rooms;
+  const rooms = manager.findRoomsForPlayer(name);
+
+  const defaultRoomAvailable = !manager.findRoom('default').gameInProgress;
 
   socket.emit(events.ROOMS_JOINED, {
+    id: socket.id,
     name: socket.username,
     rooms,
+    defaultRoomAvailable,
   });
 };
 
@@ -289,6 +292,8 @@ const makeHandleDisconnect = (socket) => (data) => {
 };
 
 const handleConnection = (socket) => {
+  manager.createRoom(scatters, 'default');
+
   const handleName = makeHandleName(socket);
   const handleRoom = makeHandleRoom(socket);
   const handleStartGame = makeHandleStartGame(socket);

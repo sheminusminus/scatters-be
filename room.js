@@ -119,6 +119,10 @@ module.exports = class Room {
     this.game.removePlayer(id);
   }
 
+  removePlayerByName(username) {
+    this.game.removePlayerByName(username);
+  }
+
   updatePlayer(id, player) {
     this.game.updatePlayer(id, player);
   }
