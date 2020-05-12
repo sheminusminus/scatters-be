@@ -389,6 +389,6 @@ module.exports = class Game {
       this.activePlayer = player.username;
     }
 
-    return this;
+    return player;
   }
 };

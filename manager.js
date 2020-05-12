@@ -70,13 +70,18 @@ module.exports = class Manager {
   addPlayerToRoom(roomName, username) {
     const room = this.findRoom(roomName);
     const player = room.addPlayer(username);
-    this.presence.addPlayer(player);
+    this.presence.addUser(player);
     this.rooms.set(roomName, room);
+    return player;
   }
 
   removePlayerFromRoom(roomName, username) {
     const room = this.findRoom(roomName);
     room.removePlayer(username);
     this.rooms.set(roomName, room);
+  }
+
+  setPlayerOffline() {
+
   }
 };

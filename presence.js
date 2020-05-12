@@ -1,18 +1,19 @@
 const moment = require('moment');
 
-
-const INTERVAL = 2000;
-const MAX = 4000;
+const INTERVAL_MIN = 3;
+const INTERVAL = INTERVAL_MIN * 60 * 1000;
+const MAX_MIN = 5;
+const MAX = MAX_MIN * 60 * 1000;
 
 module.exports = class Presence {
   constructor() {
     this.users = new Map();
 
-    this.addPlayer = this.addPlayer.bind(this);
-    this.listAllPlayers = this.listAllPlayers.bind(this);
-    this.listAllPlayerNames = this.listAllPlayerNames.bind(this);
+    this.addUser = this.addUser.bind(this);
     this.checkUsersStatus = this.checkUsersStatus.bind(this);
-    this.listOnlinePlayers = this.listOnlinePlayers.bind(this);
+    this.listAllUserNames = this.listAllUserNames.bind(this);
+    this.listAllUsers = this.listAllUsers.bind(this);
+    this.listOnlineUsers = this.listOnlineUsers.bind(this);
     this.setCheckUsersStatusInterval = this.setCheckUsersStatusInterval.bind(this);
 
     this.interval = this.setCheckUsersStatusInterval();
@@ -26,41 +27,36 @@ module.exports = class Presence {
     return [...this.users.keys()];
   }
 
-  addPlayer(player) {
-    this.users.set(player.username, {
-      player,
-      isOnline: true,
-    });
+  addUser(user) {
+    this.users.set(user.username, user);
   }
 
-  listAllPlayers() {
-    return this.state.map(({ player }) => player);
+  listAllUsers() {
+    return this.state.map((user) => user);
   }
 
-  listAllPlayerNames() {
+  listAllUserNames() {
     return this.stateKeys;
   }
 
-  listOnlinePlayers() {
+  listOnlineUsers() {
     return this.state
-      .filter(({ isOnline }) => isOnline)
-      .map(({ player }) => player);
+      .filter((user) => user.isOnline)
+      .map((user) => user);
   }
 
   checkUsersStatus() {
     const now = moment();
 
     this.users.forEach((user) => {
-      const { player } = user;
+      const diff = Math.abs(now.diff(moment(user.lastSeen), 'seconds'));
 
-      const diff = Math.abs(now.diff(moment(player.lastSeen), 'seconds'));
+      const isOnline = Boolean(diff <= MAX && user.socket);
 
-      const isOnline = diff <= MAX;
-
-      this.users.set(player.username, {
-        player,
-        isOnline,
-      });
+      if (isOnline !== user.isOnline) {
+        user.setIsOnline(isOnline);
+        this.users.set(user.username, user);
+      }
     });
 
     this.interval = this.setCheckUsersStatusInterval();

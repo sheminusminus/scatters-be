@@ -3,36 +3,36 @@ const moment = require('moment');
 const Player = require('./player');
 
 
+const IGNORE_PROPS = ['isOnline', 'lastSeen'];
+
 const onChange = (object, onChange) => {
   const handler = {
-    get(target, property, receiver) {
-      try {
-        return new Proxy(target[property], handler);
-      } catch (err) {
-        return Reflect.get(target, property, receiver);
+    set(target, property, value) {
+      const shouldHandle = !IGNORE_PROPS.includes(property);
+
+      if (shouldHandle) {
+        onChange(property, value);
       }
-    },
-    defineProperty(target, property, descriptor) {
-      onChange();
-      return Reflect.defineProperty(target, property, descriptor);
-    },
-    deleteProperty(target, property) {
-      onChange();
-      return Reflect.deleteProperty(target, property);
+
+      return Reflect.set(...arguments);
     },
   };
 
   return new Proxy(object, handler);
 };
 
-module.exports = (username, afterChange) => {
+module.exports = (username) => {
   const player = new Player(username);
 
-  return onChange(player, () => {
-    player.lastSeen = moment().format();
+  const handleChange = (property, value) => {
+    console.log('player change detected', player, property, value);
 
-    if (afterChange) {
-      afterChange();
+    if (!player.isOnline) {
+      console.log('setting isOnline from change on:', property);
+      player.setIsOnline(true);
+      player.setLastSeen(moment().format());
     }
-  });
+  };
+
+  return onChange(player, handleChange);
 };

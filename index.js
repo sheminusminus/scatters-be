@@ -48,8 +48,12 @@ const events = {
 const presence = new Presence();
 const manager = new Manager(presence);
 
+const $room = (roomName) => manager.findRoom(roomName);
+
 const handleRoomJoined = (socket, username, roomName) => () => {
-  const room = manager.findRoom(roomName);
+  console.log('room was joined', username, roomName);
+
+  const room = $room(roomName);
 
   socket.emit(events.JOINED_ROOM, {
     activePlayer: room.activePlayer,
@@ -68,13 +72,20 @@ const handleRoomJoined = (socket, username, roomName) => () => {
   });
 };
 
+const makeHandleDisconnect = (socket, player) => (reason) => {
+  console.log('socket disconnected:', reason);
+  player.setIsOnline(false);
+};
+
 const makeHandleRoom = (socket) => (data) => {
+  console.log('room join requested', data);
+
   const { room: roomName, username } = data;
 
   let foundRoom;
 
   if (roomName) {
-    foundRoom = manager.findRoom(roomName);
+    foundRoom = $room(roomName);
   }
 
   if (!foundRoom) {
@@ -84,13 +95,17 @@ const makeHandleRoom = (socket) => (data) => {
   if (foundRoom) {
     const handleGetStatus = makeHandleGetStatus(socket);
     const handleJoinRoom = handleRoomJoined(socket, username, foundRoom.name);
-    manager.addPlayerToRoom(foundRoom.name, username);
+    const player = manager.addPlayerToRoom(foundRoom.name, username);
+    const handleDisconnect = makeHandleDisconnect(socket, player);
     socket.join(foundRoom.name, handleJoinRoom);
+    socket.on('disconnect', handleDisconnect);
     foundRoom.registerPhaseListener(username, handleGetStatus);
   }
 };
 
 const makeHandleName = (socket) => (data) => {
+  console.log('username received', data);
+
   const { username } = data;
 
   socket.username = username;
@@ -111,7 +126,7 @@ const makeHandleStartGame = (socket) => (data) => {
 
   const { room: roomName } = data;
 
-  const room = manager.findRoom(roomName);
+  const room = $room(roomName);
 
   room.startGame();
 
@@ -121,7 +136,7 @@ const makeHandleStartGame = (socket) => (data) => {
 };
 
 const handleTimerFire = (roomName) => (timeLeft) => {
-  const room = manager.findRoom(roomName);
+  const room = $room(roomName);
 
   scatters.to(room.name).emit(events.TIMER_FIRED, {
     timeLeft,
@@ -139,7 +154,7 @@ const handleStartRound = (data) => {
 
   const timerFired = handleTimerFire(roomName);
 
-  const room = manager.findRoom(roomName);
+  const room = $room(roomName);
 
   room.startTimer(timerFired);
 
@@ -154,7 +169,7 @@ const makeHandleResetDiceRoll = (socket) => (data) => {
 
   const { room: roomName } = data;
 
-  const room = manager.findRoom(roomName);
+  const room = $room(roomName);
 
   room.resetDiceRoll();
 
@@ -166,7 +181,7 @@ const makeHandleRollDice = (socket) => (data) => {
 
   const { room: roomName } = data;
 
-  const room = manager.findRoom(roomName);
+  const room = $room(roomName);
 
   if (socket.username !== room.activePlayer) {
     return;
@@ -184,7 +199,7 @@ const makeHandleSendAnswers = (socket) => (data) => {
 
   const { answers, room: roomName } = data;
 
-  const room = manager.findRoom(roomName);
+  const room = $room(roomName);
 
   const responses = room.setPlayerAnswers(socket.username, answers);
 
@@ -202,7 +217,7 @@ const makeHandleSendTallies = (socket) => (data) => {
 
   const { room: roomName, tallies } = data;
 
-  const room = manager.findRoom(roomName);
+  const room = $room(roomName);
 
   room.talliesToScores(tallies, () => {
     console.log('round scored', room.state);
@@ -218,7 +233,7 @@ const makeHandleNextRound = (socket) => (data) => {
 
   const { room: roomName } = data;
 
-  const room = manager.findRoom(roomName);
+  const room = $room(roomName);
 
   room.nextRound();
 
@@ -235,7 +250,7 @@ const makeHandleSetRound = (socket) => (data) => {
 
   const { room: roomName } = data;
 
-  const room = manager.findRoom(roomName);
+  const room = $room(roomName);
 
   room.setRound(data.round);
 
@@ -251,7 +266,7 @@ const makeHandleGetStatus = (socket) => (data) => {
 
   const { room: roomName } = data;
 
-  const room = manager.findRoom(roomName);
+  const room = $room(roomName);
 
   const activePlayer = room.activePlayer;
   const currentList = room.getRound();
@@ -272,19 +287,6 @@ const makeHandleGetStatus = (socket) => (data) => {
   });
 };
 
-const makeHandleDisconnect = (socket) => (data) => {
-  // const { room: roomName } = data;
-  //
-  // const room = manager.findRoom(roomName);
-  //
-  // room.removePlayer(socket.id);
-  //
-  // scatters.to(room.name).emit('player-left', {
-  //   name: socket.username,
-  //   state: room.state,
-  // });
-};
-
 const handleConnection = (socket) => {
   manager.createRoom(scatters, 'default');
 
@@ -298,7 +300,6 @@ const handleConnection = (socket) => {
   const handleNextRound = makeHandleNextRound(socket);
   const handleGetStatus = makeHandleGetStatus(socket);
   const handleSetRound = makeHandleSetRound(socket);
-  const handleDisconnect = makeHandleDisconnect(socket);
 
   socket.on(events.EMIT_NAME, handleName);
 
@@ -321,8 +322,6 @@ const handleConnection = (socket) => {
   socket.on(events.GET_STATUS, handleGetStatus);
 
   socket.on(events.SET_ROUND, handleSetRound);
-
-  socket.on('disconnect', handleDisconnect);
 };
 
 scatters.on('connection', handleConnection);
