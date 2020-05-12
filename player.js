@@ -1,31 +1,33 @@
+const moment = require('moment');
+
+
 class Player {
-  constructor(id, username) {
-    this.id = id;
-    this.username = username;
-    this.init();
+  constructor(username) {
+    this.init(username);
+    this.setAnswers = this.setAnswers.bind(this);
+    this.setOrdinal = this.setOrdinal.bind(this);
   }
 
-  init() {
+  init(username) {
+    this.username = username;
+    this.answers = [];
+    this.ordinal = -1;
+    this.rerolls = 1;
+    this.roundScores = [];
     this.score = 0;
     this.setScores = [];
-    this.roundScores = [];
-    this.turn = false;
-    this.rerolls = 1;
-    this.ordinal = -1;
-    this.answers = [];
-    this.waiting = false;
+    this.isTurn = false;
+    this.lastSeen = moment().format();
   }
 
   setAnswers(_answers) {
     this.answers = _answers;
+    return this;
   }
 
   setOrdinal(ordinal) {
     this.ordinal = ordinal;
-  }
-
-  setWaiting(_waiting) {
-    this.waiting = _waiting;
+    return this;
   }
 }
 

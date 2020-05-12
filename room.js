@@ -7,28 +7,24 @@ module.exports = class Room {
     this.name = name;
     this.io = io;
     this.id = id;
-    this.registerPhaseListener = this.registerPhaseListener.bind(this);
-    this.unRegisterPhaseListener = this.unRegisterPhaseListener.bind(this);
-    this.getRound = this.getRound.bind(this);
-    this.setRound = this.setRound.bind(this);
-    this.nextRound = this.nextRound.bind(this);
-    this.startGame = this.startGame.bind(this);
-    this.startTimer = this.startTimer.bind(this);
+
     this.addPlayer = this.addPlayer.bind(this);
     this.findPlayer = this.findPlayer.bind(this);
-    this.findPrevPlayer = this.findPrevPlayer.bind(this);
-    this.findPlayerById = this.findPlayerById.bind(this);
-    this.findPrevPlayerById = this.findPrevPlayerById.bind(this);
-    this.removePrevPlayer = this.removePrevPlayer.bind(this);
-    this.removePlayer = this.removePlayer.bind(this);
-    this.updatePlayer = this.updatePlayer.bind(this);
-    this.unwaitAllPlayers = this.unwaitAllPlayers.bind(this);
+    this.getRound = this.getRound.bind(this);
+    this.nextRound = this.nextRound.bind(this);
     this.nextTurn = this.nextTurn.bind(this);
-    this.rollDice = this.rollDice.bind(this);
+    this.registerPhaseListener = this.registerPhaseListener.bind(this);
+    this.removePlayer = this.removePlayer.bind(this);
     this.reRollDice = this.reRollDice.bind(this);
     this.resetDiceRoll = this.resetDiceRoll.bind(this);
+    this.rollDice = this.rollDice.bind(this);
     this.setPlayerAnswers = this.setPlayerAnswers.bind(this);
+    this.setRound = this.setRound.bind(this);
+    this.startGame = this.startGame.bind(this);
+    this.startTimer = this.startTimer.bind(this);
     this.talliesToScores = this.talliesToScores.bind(this);
+    this.unRegisterPhaseListener = this.unRegisterPhaseListener.bind(this);
+    this.updatePlayer = this.updatePlayer.bind(this);
   }
 
   get phase() {
@@ -59,80 +55,64 @@ module.exports = class Room {
     return this.game.dice;
   }
 
-  registerPhaseListener(id, callback) {
-    this.game.registerPhaseListener(id, callback);
+  get numPlayers() {
+    return this.game.numPlayers;
   }
 
-  unRegisterPhaseListener(id) {
-    this.game.unRegisterPhaseListener(id);
+  get state() {
+    return this.game.state;
+  }
+
+  registerPhaseListener(key, callback) {
+    return this.game.registerPhaseListener(key, callback);
+  }
+
+  unRegisterPhaseListener(key) {
+    return this.game.unRegisterPhaseListener(key);
   }
 
   getRound() {
-    return this.game.round;
+    return this.game.getRound();
   }
 
   setRound(round) {
-    this.game.setRound(round);
+    return this.game.setRound(round);
   }
 
   nextRound() {
-    this.game.nextRound();
+    return this.game.nextRound();
   }
 
   endGame() {
-    this.game.endGame();
+    return this.game.endGame();
   }
 
   startGame() {
-    this.game.startGame();
+    return this.game.startGame();
   }
 
-  startTimer(cb) {
-    this.game.startTimer(cb);
+  startTimer(callback) {
+    return this.game.startTimer(callback);
   }
 
-  addPlayer(id, username) {
-    this.game.addPlayer(id, username);
+  addPlayer(username) {
+    return this.game.addPlayer(username);
   }
 
   findPlayer(username) {
     return this.game.findPlayer(username);
   }
 
-  findPrevPlayer(username) {
-    return this.game.findPrevPlayer(username);
+  removePlayer(username) {
+    return this.game.removePlayer(username);
   }
 
-  findPlayerById(id) {
-    return this.game.findPlayerById(id);
-  }
-
-  findPrevPlayerById(id) {
-    return this.game.findPrevPlayerById(id);
-  }
-
-  removePrevPlayer(username) {
-    this.game.removePrevPlayer(username);
-  }
-
-  removePlayer(id) {
-    this.game.removePlayer(id);
-  }
-
-  removePlayerByName(username) {
-    this.game.removePlayerByName(username);
-  }
-
-  updatePlayer(id, player) {
-    this.game.updatePlayer(id, player);
-  }
-
-  unwaitAllPlayers() {
-    this.game.unwaitAllPlayers();
+  updatePlayer(player) {
+    return this.game.updatePlayer(player);
   }
 
   nextTurn() {
-    this.game.nextTurn();
+    return this.game.nextTurn();
   }
 
   rollDice() {
@@ -147,35 +127,11 @@ module.exports = class Room {
     this.game.resetDiceRoll();
   }
 
-  setPlayerAnswers(id, answers) {
-    return this.game.setPlayerAnswers(id, answers);
+  setPlayerAnswers(username, answers) {
+    return this.game.setPlayerAnswers(username, answers);
   }
 
-  talliesToScores(tallies, callback) {
-    this.game.talliesToScores(tallies, callback);
-  }
-
-  get numPlayersNotWaiting() {
-    return this.game.numPlayersNotWaiting;
-  }
-
-  get numPlayers() {
-    return this.game.numPlayers;
-  }
-
-  get prevState() {
-    return this.game.prevState;
-  }
-
-  get playersNotWaiting() {
-    return this.game.playersNotWaiting;
-  }
-
-  get playersWaiting() {
-    return this.game.playersWaiting;
-  }
-
-  get state() {
-    return this.game.state;
+  talliesToScores(tallies, done) {
+    return this.game.talliesToScores(tallies, done);
   }
 };

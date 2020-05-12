@@ -4,14 +4,48 @@ const Room = require('./room');
 
 
 module.exports = class Manager {
-  constructor() {
+  constructor(presence) {
+    this.presence = presence;
     this.rooms = new Map();
+    this.players = new Map();
+  }
+
+  get state() {
+    return [...this.rooms.values()];
+  }
+
+  get stateKeys() {
+    return [...this.rooms.keys()];
+  }
+
+  recordPlayer(player) {
+    this.players.set(player.username, player);
+  }
+
+  listAllPlayers() {
+    return [...this.players.values()];
+  }
+
+  listAllPlayerNames() {
+    return [...this.players.keys()];
+  }
+
+  listPlayersInRoom(roomName) {
+    const room = this.rooms.get(roomName);
+
+    if (room) {
+      return room.state;
+    }
+
+    return undefined;
   }
 
   createRoom(io, name) {
     const roomId = shortId.generate();
     const room = new Room(io, name, roomId);
+
     this.rooms.set(name, room);
+
     return room;
   }
 
@@ -21,10 +55,6 @@ module.exports = class Manager {
 
   findRoom(name) {
     return this.rooms.get(name);
-  }
-
-  findRoomById(id) {
-    return this.state.find((room) => room.id === id);
   }
 
   findRoomsForPlayer(username) {
@@ -37,19 +67,16 @@ module.exports = class Manager {
     }), {});
   }
 
-  addPlayerToRoom(_room, id, username) {
-    const room = this.findRoom(_room);
-    room.addPlayer(id, username);
-    this.rooms.set(_room, room);
+  addPlayerToRoom(roomName, username) {
+    const room = this.findRoom(roomName);
+    const player = room.addPlayer(username);
+    this.presence.addPlayer(player);
+    this.rooms.set(roomName, room);
   }
 
-  removePlayerFromRoom(_room, id, username) {
-    const room = this.findRoom(_room);
-    room.removePlayer(id);
-    this.rooms.set(_room, room);
-  }
-
-  get state() {
-    return Array.from(this.rooms.values());
+  removePlayerFromRoom(roomName, username) {
+    const room = this.findRoom(roomName);
+    room.removePlayer(username);
+    this.rooms.set(roomName, room);
   }
 };

@@ -78,7 +78,7 @@ const makeHandleJoinRoom = (socket, roomName) => () => {
 
 const makeHandleName = (socket) => (data) => {
   console.log('handling name', defaultRoomName, data);
-  socket.username = data.name;
+  socket.username = data.username;
   socket.room = defaultRoomName;
 
   const handleJoinRoom = makeHandleJoinRoom(socket, data.room);

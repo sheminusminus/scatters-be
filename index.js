@@ -1,5 +1,4 @@
 require('dotenv').config();
-
 const express = require('express');
 
 const app = express();
@@ -7,17 +6,10 @@ const app = express();
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
 
-const Game = require('./game');
 const Manager = require('./manager');
+const Presence = require('./presence');
 
 const scatters = io.of('/scatters');
-
-const defaultRoomName = process.env.ROOM_NAME;
-
-// const rooms = {
-//   [defaultRoomName]: scatters,
-// };
-// const games = {};
 
 const listener = server.listen(process.env.PORT, () => {
   console.log('Your app is listening on port ' + listener.address().port);
@@ -53,32 +45,31 @@ const events = {
   WAIT_NEXT_ROUND: 'wait-next-round',
 };
 
-const manager = new Manager();
+const presence = new Presence();
+const manager = new Manager(presence);
 
-const handleRoomJoined = (socket, roomName) => () => {
+const handleRoomJoined = (socket, username, roomName) => () => {
   const room = manager.findRoom(roomName);
 
   socket.emit(events.JOINED_ROOM, {
     activePlayer: room.activePlayer,
-    id: socket.id,
-    name: socket.username,
+    currentList: room.getRound(),
     players: room.state,
-    room: roomName,
+    room: room.name,
+    username: username,
   });
 
   socket.to(roomName).emit(events.PLAYERS_UPDATED, {
     activePlayer: room.activePlayer,
-    name: socket.username,
+    currentList: room.getRound(),
     players: room.state,
+    room: room.name,
+    username: username,
   });
-
-  if (room.roundInProgress) {
-    socket.emit(events.WAIT_NEXT_ROUND);
-  }
 };
 
 const makeHandleRoom = (socket) => (data) => {
-  const { room: roomName } = data;
+  const { room: roomName, username } = data;
 
   let foundRoom;
 
@@ -92,32 +83,31 @@ const makeHandleRoom = (socket) => (data) => {
 
   if (foundRoom) {
     const handleGetStatus = makeHandleGetStatus(socket);
-    const handleJoinRoom = handleRoomJoined(socket, foundRoom.name);
-    manager.addPlayerToRoom(foundRoom.name, socket.id, socket.username);
+    const handleJoinRoom = handleRoomJoined(socket, username, foundRoom.name);
+    manager.addPlayerToRoom(foundRoom.name, username);
     socket.join(foundRoom.name, handleJoinRoom);
-    foundRoom.registerPhaseListener(socket.id, handleGetStatus);
+    foundRoom.registerPhaseListener(username, handleGetStatus);
   }
 };
 
 const makeHandleName = (socket) => (data) => {
-  const { name } = data;
+  const { username } = data;
 
-  socket.username = name;
+  socket.username = username;
 
-  const rooms = manager.findRoomsForPlayer(name);
+  const rooms = manager.findRoomsForPlayer(username);
 
   const defaultRoomAvailable = !manager.findRoom('default').gameInProgress;
 
   socket.emit(events.ROOMS_JOINED, {
-    id: socket.id,
-    name: socket.username,
+    username,
     rooms,
     defaultRoomAvailable,
   });
 };
 
 const makeHandleStartGame = (socket) => (data) => {
-  console.log('start game', data);
+  console.log('start game', data, socket.username);
 
   const { room: roomName } = data;
 
@@ -160,7 +150,8 @@ const handleStartRound = (data) => {
 };
 
 const makeHandleResetDiceRoll = (socket) => (data) => {
-  console.log('reset dice roll requested');
+  console.log('reset dice roll requested', data, socket.username);
+
   const { room: roomName } = data;
 
   const room = manager.findRoom(roomName);
@@ -171,12 +162,13 @@ const makeHandleResetDiceRoll = (socket) => (data) => {
 };
 
 const makeHandleRollDice = (socket) => (data) => {
-  console.log('dice roll requested');
+  console.log('dice roll requested', socket.username, data);
+
   const { room: roomName } = data;
 
   const room = manager.findRoom(roomName);
 
-  if (socket.id !== room.activePlayer) {
+  if (socket.username !== room.activePlayer) {
     return;
   }
 
@@ -188,15 +180,15 @@ const makeHandleRollDice = (socket) => (data) => {
 };
 
 const makeHandleSendAnswers = (socket) => (data) => {
-  console.log('got answers for socket: ', socket.id);
+  console.log('got answers for socket: ', data, socket.username);
 
   const { answers, room: roomName } = data;
 
   const room = manager.findRoom(roomName);
 
-  const responses = room.setPlayerAnswers(socket.id, answers);
+  const responses = room.setPlayerAnswers(socket.username, answers);
 
-  if (responses.length === room.numPlayersNotWaiting) {
+  if (responses.length === room.numPlayers) {
     console.log('got all responses', responses);
 
     scatters.to(room.name).emit(events.GOT_RESPONSES, {
@@ -206,7 +198,8 @@ const makeHandleSendAnswers = (socket) => (data) => {
 };
 
 const makeHandleSendTallies = (socket) => (data) => {
-  console.log('got tallies for socket: ', socket.id, data);
+  console.log('got tallies for socket: ', socket.username, data);
+
   const { room: roomName, tallies } = data;
 
   const room = manager.findRoom(roomName);
@@ -221,14 +214,15 @@ const makeHandleSendTallies = (socket) => (data) => {
 };
 
 const makeHandleNextRound = (socket) => (data) => {
-  console.log('next round requested');
+  console.log('next round requested', data, socket.username);
+
   const { room: roomName } = data;
 
   const room = manager.findRoom(roomName);
 
   room.nextRound();
 
-  console.log(room.activePlayer);
+  console.log('new active player', room.activePlayer);
 
   scatters.to(room.name).emit(events.NEXT_ROUND, {
     activePlayer: room.activePlayer,
@@ -237,7 +231,8 @@ const makeHandleNextRound = (socket) => (data) => {
 };
 
 const makeHandleSetRound = (socket) => (data) => {
-  console.log('set round requested', data);
+  console.log('set round requested', data, socket.username);
+
   const { room: roomName } = data;
 
   const room = manager.findRoom(roomName);
@@ -252,12 +247,11 @@ const makeHandleSetRound = (socket) => (data) => {
 };
 
 const makeHandleGetStatus = (socket) => (data) => {
-  console.log('game status requested');
+  console.log('game status requested', data, socket.username);
+
   const { room: roomName } = data;
 
   const room = manager.findRoom(roomName);
-
-  room.unwaitAllPlayers();
 
   const activePlayer = room.activePlayer;
   const currentList = room.getRound();
