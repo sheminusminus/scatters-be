@@ -60,7 +60,23 @@ module.exports = class Room {
   }
 
   get state() {
-    return this.game.state.map((player) => player.getDataForRoom(this.name));
+    return this.game.state.map((player) => player.getDataForRoom(this.name, true));
+  }
+
+  getData(serializable = false) {
+    const data = {
+      name: this.name,
+      players: this.state,
+    };
+
+    if (serializable) {
+      return data;
+    }
+
+    return {
+      ...this,
+      ...data,
+    };
   }
 
   registerPhaseListener(key, callback) {

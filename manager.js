@@ -22,6 +22,14 @@ module.exports = class Manager {
     this.players.set(player.username, player);
   }
 
+  listAllRooms() {
+    return this.state.map((room) => room.getData(true));
+  }
+
+  listRoomsExcluding(excludedRooms) {
+    return this.listAllRooms().filter((room) => !excludedRooms[room.name]);
+  }
+
   listAllPlayers() {
     return [...this.players.values()];
   }
@@ -61,10 +69,7 @@ module.exports = class Manager {
     return this.state.filter((room) => {
       const playerInRoom = room.findPlayer(username);
       return Boolean(playerInRoom);
-    }).reduce((obj, room) => ({
-      ...obj,
-      [room.name]: room.name,
-    }), {});
+    }).map((room) => room.getData(true));
   }
 
   addPlayerToRoom(roomName, username) {

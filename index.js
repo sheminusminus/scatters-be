@@ -8,6 +8,7 @@ const io = require('socket.io')(server);
 
 const Manager = require('./manager');
 const Presence = require('./presence');
+const Invitations = require('./invitations');
 
 const scatters = io.of('/scatters');
 
@@ -26,6 +27,7 @@ const events = {
   GET_STATUS: 'get-status',
   GOT_RESPONSES: 'got-responses',
   JOINED_ROOM: 'joined-room',
+  LIST_ROOMS: 'list-rooms',
   NEXT_ROUND: 'next-round',
   PLAYERS_UPDATED: 'players-updated',
   REQUEST_ROOM: 'request-room',
@@ -47,6 +49,7 @@ const events = {
 
 const presence = new Presence();
 const manager = new Manager(presence);
+const invites = new Invitations();
 
 const $room = (roomName) => manager.findRoom(roomName);
 
@@ -110,13 +113,15 @@ const makeHandleName = (socket) => (data) => {
 
   socket.username = username;
 
-  const rooms = manager.findRoomsForPlayer(username);
+  const joinedRooms = manager.findRoomsForPlayer(username);
+  const allRooms = manager.listAllRooms();
 
   const defaultRoomAvailable = !manager.findRoom('default').gameInProgress;
 
-  socket.emit(events.ROOMS_JOINED, {
+  socket.emit(events.LIST_ROOMS, {
     username,
-    rooms,
+    joinedRooms,
+    allRooms,
     defaultRoomAvailable,
   });
 };
