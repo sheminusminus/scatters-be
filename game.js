@@ -54,12 +54,12 @@ module.exports = class Game {
     const player = this.players.get(newValue);
 
     if (lastActivePlayer) {
-      lastActivePlayer.isTurn = false;
+      lastActivePlayer.setRoomIsTurn(this.room, false);
       this.players.set(lastActivePlayer.username, lastActivePlayer);
     }
 
     if (player) {
-      player.isTurn = true;
+      player.setRoomIsTurn(this.room, true);
       this.players.set(player.username, player);
       this._activePlayer = newValue;
     }
@@ -107,17 +107,21 @@ module.exports = class Game {
     this.players.forEach((player) => {
       let roundScore = 0;
 
+      const setScores = player.getRoomSetScores(this.room);
+
       for (let i = 0; i < SETS_PER_ROUND; i += 1) {
         let setScore = 0;
 
         for (let j = 0; j < this.numPlayers; j += 1) {
-          const score = player.setScores[j][i];
+          const score = setScores[j][i];
           setScore += score;
         }
 
+        const answers = player.getRoomAnswers(this.room);
+
         if (setScore > 0) {
           let alliterationScore = 0;
-          const answer = player.answers[i];
+          const answer = answers[i];
           const words = answer.split(' ');
 
           words.forEach((w, idx) => {
@@ -132,9 +136,9 @@ module.exports = class Game {
         }
       }
 
-      player.roundScores.push(roundScore);
-      player.score += roundScore;
-      player.setScores = [];
+      player.pushRoomRoundScore(this.room, roundScore);
+      player.incrRoomScore(this.room, roundScore);
+      player.resetRoomSetScores(this.room);
     });
 
     return this;
@@ -219,7 +223,7 @@ module.exports = class Game {
       let idx = 0;
 
       this.players.forEach((player) => {
-        player.ordinal = idx;
+        player.setRoomOrdinal(this.room, idx);
         idx += 1;
       });
 
@@ -248,12 +252,14 @@ module.exports = class Game {
   setPlayerAnswers(username, answers) {
     const player = this.findPlayer(username);
 
-    player.setAnswers(answers);
+    player.setRoomAnswers(this.room, answers);
 
     this.players.set(username, player);
 
     return this.state.reduce((arr, p) => {
-      if (p.answers.length === 0) {
+      const roomAnswers = p.getRoomAnswers(this.room);
+
+      if (roomAnswers === 0) {
         return arr;
       }
 
@@ -261,7 +267,7 @@ module.exports = class Game {
         ...arr,
         {
           username: p.username,
-          answers: p.answers,
+          answers: roomAnswers,
         },
       ];
     }, []);
@@ -286,7 +292,7 @@ module.exports = class Game {
       console.log('tallying: player', player);
 
       if (player) {
-        player.setScores.push(roundTallies);
+        player.pushRoomSetScores(this.room, roundTallies);
         this.players.set(username, player);
       }
     });
@@ -375,12 +381,15 @@ module.exports = class Game {
   updatePlayer(player) {
     this.state.forEach((p) => {
       if (p.username === player.username) {
-        player.setOrdinal(p.ordinal);
+        const roomOrdinal = p.getRoomOrdinal(this.room);
+        if (roomOrdinal) {
+          player.setRoomOrdinal(this.room, roomOrdinal);
+        }
       }
     });
 
-    if (player.ordinal === -1) {
-      player.ordinal = this.numPlayers;
+    if (player.getRoomOrdinal(this.room) === -1) {
+      player.setRoomOrdinal(this.room, this.numPlayers);
     }
 
     this.players.set(player.username, player);

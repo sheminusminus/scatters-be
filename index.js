@@ -184,6 +184,7 @@ const makeHandleRollDice = (socket) => (data) => {
   const room = $room(roomName);
 
   if (socket.username !== room.activePlayer) {
+    console.log('wrong player, should be:', room.activePlayer);
     return;
   }
 

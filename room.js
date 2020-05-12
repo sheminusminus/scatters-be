@@ -60,7 +60,7 @@ module.exports = class Room {
   }
 
   get state() {
-    return this.game.state;
+    return this.game.state.map((player) => player.getDataForRoom(this.name));
   }
 
   registerPhaseListener(key, callback) {
@@ -96,11 +96,15 @@ module.exports = class Room {
   }
 
   addPlayer(username) {
-    return this.game.addPlayer(username);
+    return this.game.addPlayer(username).getDataForRoom(this.name);
   }
 
   findPlayer(username) {
-    return this.game.findPlayer(username);
+    const foundPlayer = this.game.findPlayer(username);
+    if (foundPlayer) {
+      return foundPlayer.getDataForRoom(this.name);
+    }
+    return undefined;
   }
 
   removePlayer(username) {
@@ -108,7 +112,7 @@ module.exports = class Room {
   }
 
   updatePlayer(player) {
-    return this.game.updatePlayer(player);
+    return this.game.updatePlayer(player).getDataForRoom(this.name);
   }
 
   nextTurn() {
