@@ -12,6 +12,7 @@ const io = require('socket.io')(server);
 const Manager = require('./manager');
 const Presence = require('./presence');
 const Invitations = require('./invitations');
+const Notifs = require('./notifs');
 
 const scatters = io.of('/scatters');
 
@@ -57,11 +58,15 @@ const events = {
   INVITES_GET_TO_ME: 'invites-get-to-me',
   INVITES_GET_FROM_ME: 'invites-get-from-me',
   INVITES_SEND_FOR_ROOM: 'invites-send-for-room',
+
+  SET_PUSH_TOKEN: 'set-push-token',
+  SEND_PUSH: 'send-push',
 };
 
 const presence = new Presence();
 const manager = new Manager(presence);
 const invites = new Invitations();
+const notifs = new Notifs();
 
 const $room = (roomName) => manager.findRoom(roomName);
 
@@ -133,7 +138,7 @@ const makeHandleRoom = (socket) => (data) => {
 const makeHandleName = (socket) => (data) => {
   console.log('username received', data);
 
-  const { username } = data;
+  const { username, pushToken } = data;
 
   socket.username = username;
 
@@ -141,6 +146,10 @@ const makeHandleName = (socket) => (data) => {
 
   const joinedRooms = manager.findRoomsForPlayer(username);
   const allRooms = manager.listRoomsExcluding(joinedRooms);
+
+  if (pushToken) {
+    notifs.setToken(username, pushToken);
+  }
 
   socket.emit(events.LIST_ROOMS, {
     allRooms,
@@ -344,6 +353,20 @@ const makeHandleGetAllPlayers = (socket) => (data) => {
   });
 };
 
+const handleSetPushToken = (data) => {
+  console.log('set token request', data);
+  const { username, token } = data;
+  notifs.setToken(username, token);
+};
+
+const makeHandleSendPushMessage = (socket) => (data) => {
+  console.log('send push request', data);
+  const { username, title, body } = data;
+  notifs.sendNotification(username, title, body).then(() => {
+    // ack
+  });
+};
+
 const handleConnection = (socket) => {
   const stream = ss.createStream();
 
@@ -361,6 +384,7 @@ const handleConnection = (socket) => {
   const handleSetRound = makeHandleSetRound(socket);
   const handleExitRoom = makeHandleExitRoom(socket);
   const handleGetAllPlayers = makeHandleGetAllPlayers(socket);
+  const handlePushMessage = makeHandleSendPushMessage(socket);
 
   socket.on(events.EMIT_NAME, handleName);
 
@@ -387,6 +411,10 @@ const handleConnection = (socket) => {
   socket.on(events.EXIT_ROOM, handleExitRoom);
 
   socket.on(events.PRESENCE_GET_ALL_USERS, handleGetAllPlayers);
+
+  socket.on(events.SET_PUSH_TOKEN, handleSetPushToken);
+
+  socket.on(events.SEND_PUSH, handlePushMessage);
 };
 
 scatters.on('connection', handleConnection);
