@@ -25,6 +25,9 @@ module.exports = class Room {
     this.talliesToScores = this.talliesToScores.bind(this);
     this.unRegisterPhaseListener = this.unRegisterPhaseListener.bind(this);
     this.updatePlayer = this.updatePlayer.bind(this);
+    this.getPlayersAway = this.getPlayersAway.bind(this);
+    this.setPlayerAway = this.setPlayerAway.bind(this);
+    this.setPlayerBack = this.setPlayerBack.bind(this);
   }
 
   get phase() {
@@ -61,6 +64,18 @@ module.exports = class Room {
 
   get state() {
     return this.game.state.map((player) => player.getDataForRoom(this.name, true));
+  }
+
+  getPlayersAway() {
+    return this.game.getPlayersAway();
+  }
+
+  setPlayerAway(username) {
+   this.game.setPlayerAway(username);
+  }
+
+  setPlayerBack(username) {
+    this.game.setPlayerBack(username);
   }
 
   getData(serializable = false) {

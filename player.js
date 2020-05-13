@@ -22,6 +22,8 @@ class Player {
     this.setRoomOrdinal = this.setRoomOrdinal.bind(this);
     this.setRoomRoundScore = this.setRoomRoundScore.bind(this);
     this.getDataForRoom = this.getDataForRoom.bind(this);
+    this.setCurrentRoom = this.setCurrentRoom.bind(this);
+    this.getCurrentRoom = this.getCurrentRoom.bind(this);
 
     this.init(username);
   }
@@ -31,6 +33,8 @@ class Player {
     this.isOnline = true;
     this.lastSeen = moment().format();
 
+    this.currentRoom = null;
+
     this._roomOrdinals = {};
     this._roomIsTurns = {};
     this._roomAnswers = {};
@@ -39,17 +43,26 @@ class Player {
     this._roomScores = {};
   }
 
+  getCurrentRoom() {
+    return this.currentRoom;
+  }
+
+  setCurrentRoom(room) {
+    this.currentRoom = room;
+  }
+
   getDataForRoom(room, serializable = false) {
     const baseData = {
-      username: this.username,
+      answers: this.getRoomAnswers(room),
+      currentRoom: this.currentRoom,
       isOnline: this.isOnline,
+      isTurn: this.getRoomIsTurn(room),
       lastSeen: this.lastSeen,
       ordinal: this.getRoomOrdinal(room),
-      isTurn: this.getRoomIsTurn(room),
-      answers: this.getRoomAnswers(room),
-      setScores: this.getRoomSetScores(room),
       roundScores: this.getRoomRoundScore(room),
       score: this.getRoomScore(room),
+      setScores: this.getRoomSetScores(room),
+      username: this.username,
     };
 
     if (serializable) {

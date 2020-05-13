@@ -2,9 +2,9 @@ const Dice = require('./dice');
 
 const createPlayer = require('./playerPresence');
 
-// const TIMER_MIN = 3;
+const TIMER_MIN = 3;
 // const TIMER_MIN = 0.5;
-const TIMER_MIN = 0.2;
+// const TIMER_MIN = 0.2;
 const TIMER_LEN = TIMER_MIN * 60 * 1000;
 const SETS_PER_ROUND = 12;
 const TIMER_INTERVAL = 250;
@@ -15,6 +15,7 @@ module.exports = class Game {
   constructor(io, roomName) {
     this.io = io;
     this.players = new Map();
+    this.playersAway = new Set();
     this.room = roomName;
     this.phaseListeners = {};
 
@@ -41,6 +42,9 @@ module.exports = class Game {
     this.unRegisterPhaseListener = this.unRegisterPhaseListener.bind(this);
     this.update = this.update.bind(this);
     this.updatePlayer = this.updatePlayer.bind(this);
+    this.getPlayersAway = this.getPlayersAway.bind(this);
+    this.setPlayerAway = this.setPlayerAway.bind(this);
+    this.setPlayerBack = this.setPlayerBack.bind(this);
 
     void this.init();
   }
@@ -122,14 +126,17 @@ module.exports = class Game {
         if (setScore > 0) {
           let alliterationScore = 0;
           const answer = answers[i];
-          const words = answer.split(' ');
 
-          words.forEach((w, idx) => {
-            const char = w[0];
-            if (char.toLowerCase() === this.dice.value.toLowerCase() && idx > 0) {
-              alliterationScore += 1;
-            }
-          });
+          if (answer) {
+            const words = answer.split(' ');
+
+            words.forEach((w, idx) => {
+              const char = w[0];
+              if (char && char.toLowerCase() === this.dice.value.toLowerCase() && idx > 0) {
+                alliterationScore += 1;
+              }
+            });
+          }
 
           roundScore += 1;
           roundScore += alliterationScore;
@@ -271,6 +278,32 @@ module.exports = class Game {
         },
       ];
     }, []);
+  }
+
+  getPlayersAway() {
+    return this.state.filter((player) => {
+      return this.playersAway.has(player.username);
+    });
+  }
+
+  setPlayerAway(username) {
+    const player = this.findPlayer(username);
+
+    if (player) {
+      this.playersAway.add(username);
+      player.setCurrentRoom(null);
+      this.players.set(player.username, player);
+    }
+  }
+
+  setPlayerBack(username) {
+    const player = this.findPlayer(username);
+
+    if (player) {
+      this.playersAway.delete(player.username)
+      player.setCurrentRoom(this.room);
+      this.players.set(player.username, player);
+    }
   }
 
   setRound(round) {

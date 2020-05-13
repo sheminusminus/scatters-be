@@ -1,5 +1,8 @@
 require('dotenv').config();
+const fs = require('fs');
+
 const express = require('express');
+const ss = require('socket.io-stream');
 
 const app = express();
 
@@ -22,6 +25,7 @@ const events = {
   DICE_ROLL_RESET: 'dice-roll-reset',
   DICE_ROLLED: 'dice-rolled',
   EMIT_NAME: 'name',
+  EXIT_ROOM: 'exit-room',
   GAME_STARTED: 'game-started',
   GAME_STATUS: 'game-status',
   GET_STATUS: 'get-status',
@@ -33,6 +37,7 @@ const events = {
   REQUEST_ROOM: 'request-room',
   RESET_DICE_ROLL: 'reset-dice-roll',
   ROLL_DICE: 'roll-dice',
+  ROOM_EXITED: 'room-exited',
   ROOMS_JOINED: 'rooms-joined',
   ROUND_ENDED: 'round-ended',
   ROUND_SCORED: 'round-scored',
@@ -45,6 +50,13 @@ const events = {
   START_ROUND: 'start-round',
   TIMER_FIRED: 'timer-fired',
   WAIT_NEXT_ROUND: 'wait-next-round',
+
+  PRESENCE_GET_ONLINE_USERS: 'presence-get-online-users',
+  PRESENCE_GET_ALL_USERS: 'presence-get-all-users',
+
+  INVITES_GET_TO_ME: 'invites-get-to-me',
+  INVITES_GET_FROM_ME: 'invites-get-from-me',
+  INVITES_SEND_FOR_ROOM: 'invites-send-for-room',
 };
 
 const presence = new Presence();
@@ -57,10 +69,14 @@ const handleRoomJoined = (socket, username, roomName) => () => {
   console.log('room was joined', username, roomName);
 
   const room = $room(roomName);
+  const joinedRooms = manager.findRoomsForPlayer(username);
+  const allRooms = manager.listRoomsExcluding(joinedRooms);
 
   socket.emit(events.JOINED_ROOM, {
     activePlayer: room.activePlayer,
+    allRooms,
     currentList: room.getRound(),
+    joinedRooms,
     players: room.state,
     room: room.name,
     username: username,
@@ -73,6 +89,10 @@ const handleRoomJoined = (socket, username, roomName) => () => {
     room: room.name,
     username: username,
   });
+};
+
+const makeHandleReconnectionEvent = (socket, player) => (attemptNumber) => {
+  console.log('socket reconnecting at attempt number:', attemptNumber);
 };
 
 const makeHandleDisconnect = (socket, player) => (reason) => {
@@ -100,7 +120,11 @@ const makeHandleRoom = (socket) => (data) => {
     const handleJoinRoom = handleRoomJoined(socket, username, foundRoom.name);
     const player = manager.addPlayerToRoom(foundRoom.name, username);
     const handleDisconnect = makeHandleDisconnect(socket, player);
+    const handleReconnect = makeHandleReconnectionEvent(socket, player);
     socket.join(foundRoom.name, handleJoinRoom);
+    socket.on('reconnect', handleDisconnect);
+    socket.on('reconnect_attempt', handleDisconnect);
+    socket.on('reconnecting', handleDisconnect);
     socket.on('disconnect', handleDisconnect);
     foundRoom.registerPhaseListener(username, handleGetStatus);
   }
@@ -113,16 +137,15 @@ const makeHandleName = (socket) => (data) => {
 
   socket.username = username;
 
-  const joinedRooms = manager.findRoomsForPlayer(username);
-  const allRooms = manager.listAllRooms();
+  manager.recordPlayer(username);
 
-  const defaultRoomAvailable = !manager.findRoom('default').gameInProgress;
+  const joinedRooms = manager.findRoomsForPlayer(username);
+  const allRooms = manager.listRoomsExcluding(joinedRooms);
 
   socket.emit(events.LIST_ROOMS, {
-    username,
-    joinedRooms,
     allRooms,
-    defaultRoomAvailable,
+    joinedRooms,
+    username,
   });
 };
 
@@ -293,7 +316,37 @@ const makeHandleGetStatus = (socket) => (data) => {
   });
 };
 
+const makeHandleExitRoom = (socket) => (data) => {
+  console.log('player exiting room', data);
+
+  const { room: roomName, username } = data;
+
+  manager.setPlayerAway(roomName, username);
+
+  const room = $room(roomName);
+  const joinedRooms = manager.findRoomsForPlayer(username);
+  const allRooms = manager.listRoomsExcluding(joinedRooms);
+
+  socket.emit(events.ROOM_EXITED, {
+    allRooms,
+    joinedRooms,
+    players: room.getData(true),
+  });
+};
+
+const makeHandleGetAllPlayers = (socket) => (data) => {
+  console.log('request for all players', data);
+
+  const allPlayers = manager.listAllPlayers();
+
+  socket.emit(events.PRESENCE_GET_ALL_USERS, {
+    allPlayers,
+  });
+};
+
 const handleConnection = (socket) => {
+  const stream = ss.createStream();
+
   manager.createRoom(scatters, 'default');
 
   const handleName = makeHandleName(socket);
@@ -306,6 +359,8 @@ const handleConnection = (socket) => {
   const handleNextRound = makeHandleNextRound(socket);
   const handleGetStatus = makeHandleGetStatus(socket);
   const handleSetRound = makeHandleSetRound(socket);
+  const handleExitRoom = makeHandleExitRoom(socket);
+  const handleGetAllPlayers = makeHandleGetAllPlayers(socket);
 
   socket.on(events.EMIT_NAME, handleName);
 
@@ -328,6 +383,10 @@ const handleConnection = (socket) => {
   socket.on(events.GET_STATUS, handleGetStatus);
 
   socket.on(events.SET_ROUND, handleSetRound);
+
+  socket.on(events.EXIT_ROOM, handleExitRoom);
+
+  socket.on(events.PRESENCE_GET_ALL_USERS, handleGetAllPlayers);
 };
 
 scatters.on('connection', handleConnection);
