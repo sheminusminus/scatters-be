@@ -73,13 +73,16 @@ module.exports = class Game {
   }
 
   set phase(val) {
+    this._lastPhase = this._phase;
     this._phase = val;
 
-    Object.keys(this.phaseListeners).forEach((key) => {
-      this.phaseListeners[key]({
-        room: this.room,
+    if (this._lastPhase !== this._phase) {
+      Object.keys(this.phaseListeners).forEach((key) => {
+        this.phaseListeners[key]({
+          room: this.room,
+        });
       });
-    });
+    }
   }
 
   get state() {
@@ -88,6 +91,14 @@ module.exports = class Game {
 
   get stateKeys() {
     return [...this.players.keys()];
+  }
+
+  get startTime() {
+    return this.timer.startTime;
+  }
+
+  get endTime() {
+    return this.timer.endTime;
   }
 
   addPlayer(username) {
@@ -163,6 +174,8 @@ module.exports = class Game {
     this.timer = new Timer();
 
     this._activePlayer = null;
+
+    this._lastPhase = null;
     this._phase = GamePhase.NOT_STARTED;
 
     this.roundInProgress = false;
@@ -337,9 +350,11 @@ module.exports = class Game {
     this.phase = GamePhase.LIST;
     this.roundInProgress = true;
 
-    this.timer.start((...args) => {
-      this.afterStopTimer();
-      done(...args);
+    this.timer.start((timeLeft) => {
+      if (timeLeft === 0) {
+        this.afterStopTimer();
+      }
+      done(timeLeft);
     });
   }
 

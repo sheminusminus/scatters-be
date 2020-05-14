@@ -322,6 +322,7 @@ const makeHandleGetStatus = (socket) => (data) => {
     phase,
     players,
     roll,
+    room: roomName,
     roundInProgress,
   });
 };
