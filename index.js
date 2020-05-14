@@ -59,6 +59,7 @@ const events = {
   INVITES_GET_FROM_ME: 'invites-get-from-me',
   INVITES_SEND_FOR_ROOM: 'invites-send-for-room',
 
+  CONFIRM_PUSH_SENT: 'confirm-push-sent',
   SET_PUSH_TOKEN: 'set-push-token',
   SEND_PUSH: 'send-push',
 };
@@ -361,9 +362,11 @@ const handleSetPushToken = (data) => {
 
 const makeHandleSendPushMessage = (socket) => (data) => {
   console.log('send push request', data);
-  const { username, title, body } = data;
-  notifs.sendNotification(username, title, body).then(() => {
-    // ack
+  const { to: username, username: from } = data;
+  const title = `🎲 New Scatters room invite from ${from}!`;
+  const body = `(I'm trapped in a computer writing these things all day long, send help! 🆘)`;
+  notifs.sendNotification(username, title, body, data).then((json) => {
+    socket.emit(events.CONFIRM_PUSH_SENT, json);
   });
 };
 

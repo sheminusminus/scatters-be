@@ -36,7 +36,6 @@ module.exports = class Game {
     this.stopTimer = this.stopTimer.bind(this);
     this.talliesToScores = this.talliesToScores.bind(this);
     this.unRegisterPhaseListener = this.unRegisterPhaseListener.bind(this);
-    this.update = this.update.bind(this);
     this.updatePlayer = this.updatePlayer.bind(this);
     this.getPlayersAway = this.getPlayersAway.bind(this);
     this.setPlayerAway = this.setPlayerAway.bind(this);

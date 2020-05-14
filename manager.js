@@ -1,7 +1,5 @@
 const shortId = require('shortid');
 
-const createPlayer = require('./playerPresence');
-
 const Room = require('./room');
 
 
@@ -9,7 +7,6 @@ module.exports = class Manager {
   constructor(presence) {
     this.presence = presence;
     this.rooms = new Map();
-    // this.players = new Map();
     this.allPlayersSeen = new Set();
   }
 
