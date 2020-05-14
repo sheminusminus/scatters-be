@@ -1,13 +1,9 @@
 const Dice = require('./dice');
+const Timer = require('./timer');
 
 const createPlayer = require('./playerPresence');
 
-const TIMER_MIN = 3;
-// const TIMER_MIN = 0.5;
-// const TIMER_MIN = 0.2;
-const TIMER_LEN = TIMER_MIN * 60 * 1000;
 const SETS_PER_ROUND = 12;
-const TIMER_INTERVAL = 250;
 
 const GamePhase = require('./constants').GamePhase;
 
@@ -164,17 +160,16 @@ module.exports = class Game {
   }
 
   init() {
-    this.round = 0;
-    this.start = 0;
-    this.end = 0;
-    this.inProg = false;
     this.dice = new Dice();
+    this.timer = new Timer();
+
     this._activePlayer = null;
+    this._phase = GamePhase.NOT_STARTED;
+
     this.roundInProgress = false;
     this.gameInProgress = false;
-    this.callback = () => {};
+    this.round = 0;
     this.roundTallies = 0;
-    this._phase = GamePhase.NOT_STARTED;
 
     return this;
   }
@@ -182,14 +177,13 @@ module.exports = class Game {
   nextRound() {
     this.gameInProgress = false;
     this.roundInProgress = false;
-    this.round += 1;
-    this.start = 0;
-    this.end = 0;
-    this.inProg = false;
-    this.callback = () => {};
-    this.nextTurn();
     this.roundTallies = 0;
     this.phase = GamePhase.ROLL;
+
+    this.round += 1;
+
+    this.nextTurn();
+    this.timer.reset();
 
     return this;
   }
@@ -340,38 +334,28 @@ module.exports = class Game {
     return this;
   }
 
-  startTimer(cb) {
-    if (this.inProg) {
-      return this;
-    }
-
-    this.inProg = true;
+  startTimer(done) {
     this.phase = GamePhase.LIST;
     this.roundInProgress = true;
-    this.callback = cb;
-    this.start = Date.now();
-    this.end = this.start + TIMER_LEN;
 
-    this.update();
-
-    return this;
+    this.timer.start((...args) => {
+      this.afterStopTimer();
+      done(...args);
+    });
   }
 
   stopTimer() {
+    this.timer.stop();
+  }
+
+  afterStopTimer() {
     if (this.numPlayers === 0) {
       this.phase = GamePhase.NOT_STARTED;
     } else {
       this.phase = GamePhase.VOTE;
     }
 
-    this.start = 0;
-    this.end = 0;
-    this.inProg = false;
-    this.callback = () => {};
-
     this.io.to(this.room).emit('round-ended', { round: this.round });
-
-    return this;
   }
 
   talliesToScores(tallies, done) {
@@ -395,20 +379,6 @@ module.exports = class Game {
   unRegisterPhaseListener(key) {
     delete this.phaseListeners[key];
     return this;
-  }
-
-  update() {
-    const now = Date.now();
-
-    const remaining = this.end - now;
-
-    if (remaining > 0) {
-      this.callback(remaining);
-      setTimeout(this.update, TIMER_INTERVAL);
-    } else {
-      this.callback(0);
-      this.stopTimer();
-    }
   }
 
   updatePlayer(player) {
