@@ -47,11 +47,11 @@ module.exports = class Room {
   }
 
   get start() {
-    return this.game.start;
+    return this.game.startTime;
   }
 
   get end() {
-    return this.game.end;
+    return this.game.endTime;
   }
 
   get dice() {
