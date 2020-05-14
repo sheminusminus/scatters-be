@@ -1,5 +1,7 @@
 const fetch = require('node-fetch');
 
+const { pushNotifServiceUrl } = require('./constants');
+
 
 module.exports = class Notifs {
   constructor() {
@@ -10,25 +12,34 @@ module.exports = class Notifs {
     this.tokens.set(username, token);
   }
 
-  async sendNotification(username, title, body) {
-    console.log(username, title, body);
-    const token = this.tokens.get(username);
+  sendNotification(username, title, body, data) {
+    console.log(username, title, body, data);
 
-    const data = {
-      to: token,
-      title,
-      body,
-    };
+    return new Promise((resolve, reject) => {
+      const token = this.tokens.get(username);
 
-    fetch('https://exp.host/--/api/v2/push/send', {
-      method: 'post',
-      body:    JSON.stringify(data),
-      headers: {
-        'accept-encoding': 'gzip, deflate',
-        'Content-Type': 'application/json',
-        accept: 'application/json',
-        host: 'exp.host',
-      },
-    }).then(res => res.json()).then(json => console.log(json));
+      if (token && username && title && body) {
+        const { room, id: manifestId, incrementBadge } = data;
+
+        const notifData = {
+          body,
+          data: { room, incrementBadge: incrementBadge || 0 },
+          title,
+          to: token,
+          _category: `${manifestId}:roomInvite`,
+        };
+
+        fetch(pushNotifServiceUrl, {
+          method: 'post',
+          body:    JSON.stringify(notifData),
+          headers: {
+            'accept-encoding': 'gzip, deflate',
+            'Content-Type': 'application/json',
+            accept: 'application/json',
+            host: 'exp.host',
+          },
+        }).then(res => res.json()).then(json => resolve(json)).catch((err) => reject(err));
+      }
+    });
   }
 }

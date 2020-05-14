@@ -5,3 +5,5 @@ module.exports.GamePhase = {
   VOTE: 'VOTE',
   SCORES: 'SCORES',
 };
+
+module.exports.pushNotifServiceUrl = 'https://exp.host/--/api/v2/push/send';
