@@ -1,12 +1,23 @@
 const Game = require('./game');
 
+const { RoomType, RoomVisibility } = require('./constants');
+
 
 module.exports = class Room {
-  constructor(io, name, id) {
+  constructor(
+    io,
+    name,
+    creator,
+    type = RoomType.REALTIME,
+    visibility = RoomVisibility.PUBLIC,
+  ) {
     this.game = new Game(io, name);
     this.name = name;
-    this.io = io;
-    this.id = id;
+
+    this._visibility = visibility;
+    this._type = type;
+    this._invited = new Set();
+    this.creator = creator;
 
     this.addPlayer = this.addPlayer.bind(this);
     this.findPlayer = this.findPlayer.bind(this);
@@ -28,6 +39,14 @@ module.exports = class Room {
     this.getPlayersAway = this.getPlayersAway.bind(this);
     this.setPlayerAway = this.setPlayerAway.bind(this);
     this.setPlayerBack = this.setPlayerBack.bind(this);
+  }
+
+  get visibility() {
+    return this._visibility;
+  }
+
+  get type() {
+    return this._type;
   }
 
   get phase() {
@@ -66,6 +85,24 @@ module.exports = class Room {
     return this.game.state.map((player) => player.getDataForRoom(this.name, true));
   }
 
+  playerInvited(username, invitedBy) {
+    if (this._visibility === RoomVisibility.PRIVATE) {
+      if (invitedBy !== this.creator) {
+        return false;
+      }
+    }
+
+    this._invited.add(username);
+    return true;
+  }
+
+  playerAllowed(username) {
+    if (this._visibility === RoomVisibility.PUBLIC) {
+      return true;
+    }
+    return this._invited.has(username);
+  }
+
   getPlayersAway() {
     return this.game.getPlayersAway();
   }
@@ -82,6 +119,8 @@ module.exports = class Room {
     const data = {
       name: this.name,
       players: this.state,
+      visibility: this._visibility,
+      type: this._type,
     };
 
     if (serializable) {
@@ -127,6 +166,12 @@ module.exports = class Room {
   }
 
   addPlayer(username) {
+    if (this._visibility === RoomVisibility.PRIVATE) {
+      if (!this._invited.has(username)) {
+        return false;
+      }
+    }
+
     return this.game.addPlayer(username).getDataForRoom(this.name);
   }
 

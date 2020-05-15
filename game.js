@@ -5,7 +5,8 @@ const createPlayer = require('./playerPresence');
 
 const SETS_PER_ROUND = 12;
 
-const GamePhase = require('./constants').GamePhase;
+const { GamePhase } = require('./constants');
+
 
 module.exports = class Game {
   constructor(io, roomName) {

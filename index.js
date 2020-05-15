@@ -1,18 +1,21 @@
 require('dotenv').config();
-const fs = require('fs');
 
 const express = require('express');
-const ss = require('socket.io-stream');
 
 const app = express();
 
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
+const shortId = require('shortid');
 
 const Manager = require('./manager');
 const Presence = require('./presence');
 const Invitations = require('./invitations');
 const Notifs = require('./notifs');
+
+const { RoomType, RoomVisibility } = require('./constants');
+
+const SYSTEM_USERNAME = shortId.generate();
 
 const scatters = io.of('/scatters');
 
@@ -23,6 +26,7 @@ const listener = server.listen(process.env.PORT, () => {
 const events = {
   CONNECT: 'connect',
   CONNECT_ERROR: 'connect_error',
+  CREATE_ROOM: 'create-room',
   DICE_ROLL_RESET: 'dice-roll-reset',
   DICE_ROLLED: 'dice-rolled',
   EMIT_NAME: 'name',
@@ -32,12 +36,15 @@ const events = {
   GET_STATUS: 'get-status',
   GOT_RESPONSES: 'got-responses',
   JOINED_ROOM: 'joined-room',
+  JOINED_ROOM_ERROR: 'joined-room-error',
   LIST_ROOMS: 'list-rooms',
   NEXT_ROUND: 'next-round',
   PLAYERS_UPDATED: 'players-updated',
   REQUEST_ROOM: 'request-room',
   RESET_DICE_ROLL: 'reset-dice-roll',
   ROLL_DICE: 'roll-dice',
+  ROOM_CREATED: 'room-created',
+  ROOM_CREATED_ERROR: 'room-created-error',
   ROOM_EXITED: 'room-exited',
   ROOMS_JOINED: 'rooms-joined',
   ROUND_ENDED: 'round-ended',
@@ -75,8 +82,12 @@ const handleRoomJoined = (socket, username, roomName) => () => {
   console.log('room was joined', username, roomName);
 
   const room = $room(roomName);
+  console.log('line 85');
   const joinedRooms = manager.findRoomsForPlayer(username);
+  console.log('line 87');
   const allRooms = manager.listRoomsExcluding(joinedRooms);
+  console.log('line 89');
+  console.log('line 90');
 
   socket.emit(events.JOINED_ROOM, {
     activePlayer: room.activePlayer,
@@ -87,6 +98,7 @@ const handleRoomJoined = (socket, username, roomName) => () => {
     room: room.name,
     username: username,
   });
+  console.log('line 100');
 
   socket.to(roomName).emit(events.PLAYERS_UPDATED, {
     activePlayer: room.activePlayer,
@@ -106,6 +118,13 @@ const makeHandleDisconnect = (socket, player) => (reason) => {
   player.setIsOnline(false);
 };
 
+const getJoinRoomArtifacts = (socket, roomName, username) => {
+  const handleGetStatus = makeHandleGetStatus(socket);
+  const player = manager.addPlayerToRoom(roomName, username);
+  const handleJoinRoom = handleRoomJoined(socket, username, roomName);
+  return { handleGetStatus, handleJoinRoom, player };
+};
+
 const makeHandleRoom = (socket) => (data) => {
   console.log('room join requested', data);
 
@@ -118,21 +137,28 @@ const makeHandleRoom = (socket) => (data) => {
   }
 
   if (!foundRoom) {
-    foundRoom = manager.createRoom(scatters, roomName);
+    foundRoom = manager.createRoom(
+      scatters,
+      roomName,
+      username,
+    );
   }
 
   if (foundRoom) {
-    const handleGetStatus = makeHandleGetStatus(socket);
-    const handleJoinRoom = handleRoomJoined(socket, username, foundRoom.name);
-    const player = manager.addPlayerToRoom(foundRoom.name, username);
-    const handleDisconnect = makeHandleDisconnect(socket, player);
-    const handleReconnect = makeHandleReconnectionEvent(socket, player);
-    socket.join(foundRoom.name, handleJoinRoom);
-    socket.on('reconnect', handleDisconnect);
-    socket.on('reconnect_attempt', handleDisconnect);
-    socket.on('reconnecting', handleDisconnect);
-    socket.on('disconnect', handleDisconnect);
-    foundRoom.registerPhaseListener(username, handleGetStatus);
+    const {
+      handleGetStatus,
+      handleJoinRoom,
+      player,
+    } = getJoinRoomArtifacts(socket, roomName, username);
+
+    if (player) {
+      const handleDisconnect = makeHandleDisconnect(socket, player);
+      socket.join(foundRoom.name, handleJoinRoom);
+      socket.on('disconnect', handleDisconnect);
+      foundRoom.registerPhaseListener(username, handleGetStatus);
+    } else {
+      socket.emit(events.JOINED_ROOM_ERROR, { message: ' ¯\\_(ツ)_/¯ Try a different one.' });
+    }
   }
 };
 
@@ -363,18 +389,73 @@ const handleSetPushToken = (data) => {
 
 const makeHandleSendPushMessage = (socket) => (data) => {
   console.log('send push request', data);
-  const { to: username, username: from } = data;
+  const { to: username, username: from, room: roomName } = data;
   const title = `🎲 New Scatters room invite from ${from}!`;
   const body = `(I'm trapped in a computer writing these things all day long, send help! 🆘)`;
-  notifs.sendNotification(username, title, body, data).then((json) => {
-    socket.emit(events.CONFIRM_PUSH_SENT, json);
-  });
+
+  const room = $room(roomName);
+
+  if (room) {
+    const isInvited = room.playerInvited(username, from);
+
+    if (isInvited) {
+      notifs.sendNotification(username, title, body, data).then((json) => {
+        socket.emit(events.CONFIRM_PUSH_SENT, json);
+      });
+    }
+  }
+};
+
+const makeHandleCreateRoom = (socket) => (data) => {
+  console.log('request to create a new room: ', data);
+  const { visiblity, type, room: roomName, username } = data;
+
+  const existingRoom = $room(roomName);
+
+  if (existingRoom) {
+    console.log('room exists: ', roomName);
+    socket.emit(events.ROOM_CREATED_ERROR, {
+      message: 'This room name is already taken. Be more creative.',
+    });
+  } else {
+    console.log('room does not exist: ', roomName);
+    const newRoom = manager.createRoom(
+      scatters,
+      roomName,
+      username,
+      type,
+      visiblity,
+    );
+
+    const {
+      handleGetStatus,
+      handleJoinRoom,
+      player,
+    } = getJoinRoomArtifacts(socket, newRoom.name, username);
+
+    console.log('player: ', player);
+    if (player) {
+      const handleDisconnect = makeHandleDisconnect(socket, player);
+      socket.join(newRoom.name, handleJoinRoom);
+      socket.on('disconnect', handleDisconnect);
+      newRoom.registerPhaseListener(username, handleGetStatus);
+      socket.emit(events.ROOM_CREATED, data);
+    } else {
+      socket.emit(events.ROOM_CREATED_ERROR, {
+        message: 'Something weird going on probably.',
+      });
+    }
+  }
 };
 
 const handleConnection = (socket) => {
-  const stream = ss.createStream();
-
-  manager.createRoom(scatters, 'default');
+  manager.createRoom(
+    scatters,
+    'default',
+    SYSTEM_USERNAME,
+    RoomType.REALTIME,
+    RoomVisibility.PUBLIC,
+  );
 
   const handleName = makeHandleName(socket);
   const handleRoom = makeHandleRoom(socket);
@@ -389,6 +470,7 @@ const handleConnection = (socket) => {
   const handleExitRoom = makeHandleExitRoom(socket);
   const handleGetAllPlayers = makeHandleGetAllPlayers(socket);
   const handlePushMessage = makeHandleSendPushMessage(socket);
+  const handleCreateRoom = makeHandleCreateRoom(socket);
 
   socket.on(events.EMIT_NAME, handleName);
 
@@ -419,6 +501,8 @@ const handleConnection = (socket) => {
   socket.on(events.SET_PUSH_TOKEN, handleSetPushToken);
 
   socket.on(events.SEND_PUSH, handlePushMessage);
+
+  socket.on(events.CREATE_ROOM, handleCreateRoom);
 };
 
 scatters.on('connection', handleConnection);

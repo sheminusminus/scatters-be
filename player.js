@@ -35,12 +35,22 @@ class Player {
 
     this.currentRoom = null;
 
+    this._rooms = new Set();
+
     this._roomOrdinals = {};
     this._roomIsTurns = {};
     this._roomAnswers = {};
     this._roomSetScores = {};
     this._roomRoundScores = {};
     this._roomScores = {};
+  }
+
+  get rooms() {
+    return Array.from(this._rooms);
+  }
+
+  joinedRoom(room) {
+    this._rooms.add(room);
   }
 
   getCurrentRoom() {
