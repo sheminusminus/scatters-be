@@ -1,8 +1,8 @@
-const shortId = require('shortid');
-
 const Room = require('./room');
 
-const { RoomVisibility, RoomType } = require('./constants');
+const getOrCreatePlayer = require('./playerPresence');
+
+const { RoomVisibility } = require('./constants');
 
 
 module.exports = class Manager {
@@ -63,18 +63,13 @@ module.exports = class Manager {
     return undefined;
   }
 
-  createRoom(
-    io,
-    name,
-    creator,
-    type = RoomType.REALTIME,
-    visibility = RoomVisibility.PUBLIC,
-  ) {
-    const room = new Room(io, name, creator, type, visibility);
+  createRoom(params) {
+    const { name } = params;
+
+    const room = new Room(params);
 
     this.rooms.set(name, room);
 
-    console.log('all rooms', this.rooms);
     return room;
   }
 
@@ -93,13 +88,30 @@ module.exports = class Manager {
     }).map((room) => room.getData(true));
   }
 
+  findOrCreatePlayer(username) {
+    const player = getOrCreatePlayer(username);
+    this.recordPlayer(username);
+    return player;
+  }
+
   addPlayerToRoom(roomName, username) {
     const room = this.findRoom(roomName);
-    const player = room.addPlayer(username);
+
+    let player;
+
+    if (room) {
+      player = room.addPlayer(username);
+    } else {
+      player = getOrCreatePlayer(username);
+    }
 
     if (player) {
       this.presence.addUser(player);
-      this.rooms.set(roomName, room);
+
+      if (room) {
+        this.rooms.set(roomName, room);
+      }
+
       return player;
     }
 
@@ -108,8 +120,11 @@ module.exports = class Manager {
 
   removePlayerFromRoom(roomName, username) {
     const room = this.findRoom(roomName);
-    room.removePlayer(username);
-    this.rooms.set(roomName, room);
+
+    if (room) {
+      room.removePlayer(username);
+      this.rooms.set(roomName, room);
+    }
   }
 
   setPlayerOffline() {
@@ -118,16 +133,22 @@ module.exports = class Manager {
 
   getPlayersAway(roomName) {
     const room = this.findRoom(roomName);
-    room.getPlayersAway();
+    if (room) {
+      room.getPlayersAway();
+    }
   }
 
   setPlayerAway(roomName, username) {
     const room = this.findRoom(roomName);
-    room.setPlayerAway(username);
+    if (room) {
+      room.setPlayerAway(username);
+    }
   }
 
   setPlayerBack(roomName, username) {
     const room = this.findRoom(roomName);
-    room.setPlayerBack(username);
+    if (room) {
+      room.setPlayerBack(username);
+    }
   }
 };

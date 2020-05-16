@@ -8,6 +8,8 @@ const server = require('http').Server(app);
 const io = require('socket.io')(server);
 const shortId = require('shortid');
 
+const createSocketMiddleware = require('./middleware');
+
 const Manager = require('./manager');
 const Presence = require('./presence');
 const Invitations = require('./invitations');
@@ -22,6 +24,17 @@ const scatters = io.of('/scatters');
 const listener = server.listen(process.env.PORT, () => {
   console.log('Your app is listening on port ' + listener.address().port);
 });
+
+const logsOff = false;
+
+if (logsOff) {
+  const originalLog = console.log;
+  console.log = (...args) => {
+    if (args[0] === 1) {
+      originalLog(...args);
+    }
+  };
+}
 
 const events = {
   CONNECT: 'connect',
@@ -76,35 +89,38 @@ const manager = new Manager(presence);
 const invites = new Invitations();
 const notifs = new Notifs();
 
+manager.createRoom({
+  io: scatters,
+  name: 'default',
+  creator: SYSTEM_USERNAME,
+  type: RoomType.REALTIME,
+  visibility: RoomVisibility.PUBLIC,
+});
+
 const $room = (roomName) => manager.findRoom(roomName);
 
 const handleRoomJoined = (socket, username, roomName) => () => {
   console.log('room was joined', username, roomName);
 
   const room = $room(roomName);
-  console.log('line 85');
   const joinedRooms = manager.findRoomsForPlayer(username);
-  console.log('line 87');
   const allRooms = manager.listRoomsExcluding(joinedRooms);
-  console.log('line 89');
-  console.log('line 90');
 
   socket.emit(events.JOINED_ROOM, {
-    activePlayer: room.activePlayer,
+    activePlayer: room && room.activePlayer,
     allRooms,
-    currentList: room.getRound(),
+    currentList: room && room.getRound(),
     joinedRooms,
-    players: room.state,
-    room: room.name,
+    players: room && room.state,
+    room: room && room.name,
     username: username,
   });
-  console.log('line 100');
 
   socket.to(roomName).emit(events.PLAYERS_UPDATED, {
-    activePlayer: room.activePlayer,
-    currentList: room.getRound(),
-    players: room.state,
-    room: room.name,
+    activePlayer: room && room.activePlayer,
+    currentList: room && room.getRound(),
+    players: room && room.state,
+    room: room && room.name,
     username: username,
   });
 };
@@ -126,8 +142,6 @@ const getJoinRoomArtifacts = (socket, roomName, username) => {
 };
 
 const makeHandleRoom = (socket) => (data) => {
-  console.log('room join requested', data);
-
   const { room: roomName, username } = data;
 
   let foundRoom;
@@ -137,11 +151,11 @@ const makeHandleRoom = (socket) => (data) => {
   }
 
   if (!foundRoom) {
-    foundRoom = manager.createRoom(
-      scatters,
-      roomName,
-      username,
-    );
+    foundRoom = manager.createRoom({
+      io: scatters,
+      name: roomName,
+      creator: username,
+    });
   }
 
   if (foundRoom) {
@@ -162,21 +176,11 @@ const makeHandleRoom = (socket) => (data) => {
   }
 };
 
-const makeHandleName = (socket) => (data) => {
-  console.log('username received', data);
-
-  const { username, pushToken } = data;
-
-  socket.username = username;
-
-  manager.recordPlayer(username);
+const makeHandleListRooms = (socket) => (data) => {
+  const { username } = data;
 
   const joinedRooms = manager.findRoomsForPlayer(username);
   const allRooms = manager.listRoomsExcluding(joinedRooms);
-
-  if (pushToken) {
-    notifs.setToken(username, pushToken);
-  }
 
   socket.emit(events.LIST_ROOMS, {
     allRooms,
@@ -185,31 +189,47 @@ const makeHandleName = (socket) => (data) => {
   });
 };
 
-const makeHandleStartGame = (socket) => (data) => {
-  console.log('start game', data, socket.username);
+const makeHandleName = (socket) => (data) => {
+  const handleListRooms = makeHandleListRooms(socket);
 
+  const { username, pushToken } = data;
+
+  manager.recordPlayer(username);
+
+  if (pushToken) {
+    notifs.setToken(username, pushToken);
+  }
+
+  handleListRooms(data);
+};
+
+const makeHandleStartGame = (socket) => (data) => {
   const { room: roomName } = data;
 
   const room = $room(roomName);
 
-  room.startGame();
+  if (room) {
+    room.startGame();
 
-  scatters.to(room.name).emit(events.GAME_STARTED, {
-    activePlayer: room.activePlayer,
-  });
+    scatters.to(room.name).emit(events.GAME_STARTED, {
+      activePlayer: room.activePlayer,
+    });
+  }
 };
 
 const handleTimerFire = (roomName) => (timeLeft) => {
   const room = $room(roomName);
 
-  scatters.to(room.name).emit(events.TIMER_FIRED, {
-    timeLeft,
-    startTime: room.start,
-    endTime: room.end,
-  });
+  if (room) {
+    scatters.to(room.name).emit(events.TIMER_FIRED, {
+      timeLeft,
+      startTime: room.start,
+      endTime: room.end,
+    });
 
-  if (timeLeft <= 0) {
-    scatters.to(room.name).emit(events.ROUND_ENDED);
+    if (timeLeft <= 0) {
+      scatters.to(room.name).emit(events.ROUND_ENDED);
+    }
   }
 };
 
@@ -220,137 +240,139 @@ const handleStartRound = (data) => {
 
   const room = $room(roomName);
 
-  room.startTimer(timerFired);
+  if (room) {
+    room.startTimer(timerFired);
 
-  scatters.to(room.name).emit(events.ROUND_STARTED, {
-    startTime: room.start,
-    endTime: room.end,
-  });
+    scatters.to(room.name).emit(events.ROUND_STARTED, {
+      startTime: room.start,
+      endTime: room.end,
+    });
+  }
 };
 
 const makeHandleResetDiceRoll = (socket) => (data) => {
-  console.log('reset dice roll requested', data, socket.username);
-
   const { room: roomName } = data;
 
   const room = $room(roomName);
 
-  room.resetDiceRoll();
+  if (room) {
+    room.resetDiceRoll();
 
-  scatters.to(room.name).emit(events.DICE_ROLL_RESET);
+    scatters.to(room.name).emit(events.DICE_ROLL_RESET);
+  }
 };
 
 const makeHandleRollDice = (socket) => (data) => {
-  console.log('dice roll requested', socket.username, data);
-
-  const { room: roomName } = data;
+  const { room: roomName, username } = data;
 
   const room = $room(roomName);
 
-  if (socket.username !== room.activePlayer) {
-    console.log('wrong player, should be:', room.activePlayer);
-    return;
+  if (room) {
+    if (username !== room.activePlayer) {
+      console.log('wrong player, should be:', room.activePlayer);
+      return;
+    }
+
+    const roll = room.rollDice();
+
+    scatters.to(room.name).emit(events.DICE_ROLLED, {
+      roll,
+    });
   }
-
-  const roll = room.rollDice();
-
-  scatters.to(room.name).emit(events.DICE_ROLLED, {
-    roll,
-  });
 };
 
 const makeHandleSendAnswers = (socket) => (data) => {
-  console.log('got answers for socket: ', data, socket.username);
-
-  const { answers, room: roomName } = data;
+  const { answers, room: roomName, username } = data;
 
   const room = $room(roomName);
 
-  const responses = room.setPlayerAnswers(socket.username, answers);
+  if (room) {
+    const responses = room.setPlayerAnswers(username, answers);
 
-  if (responses.length === room.numPlayers) {
-    console.log('got all responses', responses);
+    if (responses.length === room.numPlayers) {
+      console.log('got all responses', responses);
 
-    scatters.to(room.name).emit(events.GOT_RESPONSES, {
-      responses,
-    });
+      scatters.to(room.name).emit(events.GOT_RESPONSES, {
+        responses,
+      });
+    }
   }
 };
 
 const makeHandleSendTallies = (socket) => (data) => {
-  console.log('got tallies for socket: ', socket.username, data);
-
   const { room: roomName, tallies } = data;
 
   const room = $room(roomName);
 
-  room.talliesToScores(tallies, () => {
-    console.log('round scored', room.state);
+  if (room) {
+    room.talliesToScores(tallies, () => {
+      console.log('round scored', room.state);
 
-    scatters.to(room.name).emit(events.ROUND_SCORED, {
-      players: room.state,
+      scatters.to(room.name).emit(events.ROUND_SCORED, {
+        players: room.state,
+      });
     });
-  });
+  }
 };
 
 const makeHandleNextRound = (socket) => (data) => {
-  console.log('next round requested', data, socket.username);
-
   const { room: roomName } = data;
 
   const room = $room(roomName);
 
-  room.nextRound();
+  if (room) {
+    room.nextRound();
 
-  console.log('new active player', room.activePlayer);
+    console.log('new active player', room.activePlayer);
 
-  scatters.to(room.name).emit(events.NEXT_ROUND, {
-    activePlayer: room.activePlayer,
-    players: room.state,
-  });
+    scatters.to(room.name).emit(events.NEXT_ROUND, {
+      activePlayer: room.activePlayer,
+      players: room.state,
+    });
+  }
 };
 
 const makeHandleSetRound = (socket) => (data) => {
-  console.log('set round requested', data, socket.username);
-
   const { room: roomName } = data;
 
   const room = $room(roomName);
 
-  room.setRound(data.round);
+  if (room) {
+    room.setRound(data.round);
 
-  scatters.to(room.name).emit(events.ROUND_SET, {
-    activePlayer: room.activePlayer,
-    currentList: room.getRound(),
-    players: room.state,
-  });
+    scatters.to(room.name).emit(events.ROUND_SET, {
+      activePlayer: room.activePlayer,
+      currentList: room.getRound(),
+      players: room.state,
+    });
+  }
 };
 
 const makeHandleGetStatus = (socket) => (data) => {
-  console.log('game status requested', data, socket.username);
-
   const { room: roomName } = data;
 
   const room = $room(roomName);
 
-  const activePlayer = room.activePlayer;
-  const currentList = room.getRound();
-  const inProgress = room.gameInProgress;
-  const phase = room.phase;
-  const players = room.state;
-  const roll = room.dice.value;
-  const roundInProgress = room.roundInProgress;
+  if (room) {
+    const activePlayer = room.activePlayer;
+    const currentList = room.getRound();
+    const inProgress = room.gameInProgress;
+    const phase = room.phase;
+    const players = room.state;
+    const roll = room.dice.value;
+    const roundInProgress = room.roundInProgress;
 
-  socket.emit(events.GAME_STATUS, {
-    activePlayer,
-    currentList,
-    inProgress,
-    phase,
-    players,
-    roll,
-    room: roomName,
-    roundInProgress,
-  });
+    socket.emit(events.GAME_STATUS, {
+      activePlayer,
+      currentList,
+      inProgress,
+      phase,
+      players,
+      roll,
+      room: roomName,
+      roundInProgress,
+    });
+  }
 };
 
 const makeHandleExitRoom = (socket) => (data) => {
@@ -367,13 +389,11 @@ const makeHandleExitRoom = (socket) => (data) => {
   socket.emit(events.ROOM_EXITED, {
     allRooms,
     joinedRooms,
-    players: room.getData(true),
+    players: room && room.getData(true),
   });
 };
 
 const makeHandleGetAllPlayers = (socket) => (data) => {
-  console.log('request for all players', data);
-
   const allPlayers = manager.listAllPlayers();
 
   socket.emit(events.PRESENCE_GET_ALL_USERS, {
@@ -382,13 +402,11 @@ const makeHandleGetAllPlayers = (socket) => (data) => {
 };
 
 const handleSetPushToken = (data) => {
-  console.log('set token request', data);
   const { username, token } = data;
   notifs.setToken(username, token);
 };
 
 const makeHandleSendPushMessage = (socket) => (data) => {
-  console.log('send push request', data);
   const { to: username, username: from, room: roomName } = data;
   const title = `🎲 New Scatters room invite from ${from}!`;
   const body = `(I'm trapped in a computer writing these things all day long, send help! 🆘)`;
@@ -407,8 +425,8 @@ const makeHandleSendPushMessage = (socket) => (data) => {
 };
 
 const makeHandleCreateRoom = (socket) => (data) => {
-  console.log('request to create a new room: ', data);
-  const { visiblity, type, room: roomName, username } = data;
+  console.log(1, 'request to create a new room: ', data);
+  const { visibility, type, room: roomName, username } = data;
 
   const existingRoom = $room(roomName);
 
@@ -419,13 +437,13 @@ const makeHandleCreateRoom = (socket) => (data) => {
     });
   } else {
     console.log('room does not exist: ', roomName);
-    const newRoom = manager.createRoom(
-      scatters,
-      roomName,
-      username,
+    const newRoom = manager.createRoom({
+      io: scatters,
+      name: roomName,
+      creator: username,
       type,
-      visiblity,
-    );
+      visibility: RoomVisibility[visibility],
+    });
 
     const {
       handleGetStatus,
@@ -434,6 +452,7 @@ const makeHandleCreateRoom = (socket) => (data) => {
     } = getJoinRoomArtifacts(socket, newRoom.name, username);
 
     console.log('player: ', player);
+
     if (player) {
       const handleDisconnect = makeHandleDisconnect(socket, player);
       socket.join(newRoom.name, handleJoinRoom);
@@ -441,6 +460,7 @@ const makeHandleCreateRoom = (socket) => (data) => {
       newRoom.registerPhaseListener(username, handleGetStatus);
       socket.emit(events.ROOM_CREATED, data);
     } else {
+      manager.deleteRoom(roomName);
       socket.emit(events.ROOM_CREATED_ERROR, {
         message: 'Something weird going on probably.',
       });
@@ -449,13 +469,9 @@ const makeHandleCreateRoom = (socket) => (data) => {
 };
 
 const handleConnection = (socket) => {
-  manager.createRoom(
-    scatters,
-    'default',
-    SYSTEM_USERNAME,
-    RoomType.REALTIME,
-    RoomVisibility.PUBLIC,
-  );
+  const middleware = createSocketMiddleware(socket, manager);
+
+  socket.use(middleware);
 
   const handleName = makeHandleName(socket);
   const handleRoom = makeHandleRoom(socket);
@@ -471,6 +487,7 @@ const handleConnection = (socket) => {
   const handleGetAllPlayers = makeHandleGetAllPlayers(socket);
   const handlePushMessage = makeHandleSendPushMessage(socket);
   const handleCreateRoom = makeHandleCreateRoom(socket);
+  const handleListRooms = makeHandleListRooms(socket);
 
   socket.on(events.EMIT_NAME, handleName);
 
@@ -503,6 +520,8 @@ const handleConnection = (socket) => {
   socket.on(events.SEND_PUSH, handlePushMessage);
 
   socket.on(events.CREATE_ROOM, handleCreateRoom);
+
+  socket.on(events.LIST_ROOMS, handleListRooms);
 };
 
 scatters.on('connection', handleConnection);

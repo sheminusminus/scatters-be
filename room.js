@@ -4,13 +4,15 @@ const { RoomType, RoomVisibility } = require('./constants');
 
 
 module.exports = class Room {
-  constructor(
-    io,
-    name,
-    creator,
-    type = RoomType.REALTIME,
-    visibility = RoomVisibility.PUBLIC,
-  ) {
+  constructor(params) {
+    const {
+      io,
+      name,
+      creator,
+      type = RoomType.REALTIME,
+      visibility = RoomVisibility.PUBLIC,
+    } = params;
+
     this.game = new Game(io, name);
     this.name = name;
 
@@ -167,7 +169,7 @@ module.exports = class Room {
 
   addPlayer(username) {
     if (this._visibility === RoomVisibility.PRIVATE) {
-      if (!this._invited.has(username)) {
+      if (!this._invited.has(username) && this.creator !== username) {
         return false;
       }
     }
