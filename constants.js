@@ -11,6 +11,11 @@ module.exports.RoomType = {
   ASYNC: Symbol('ASYNC'),
 };
 
+module.exports.GameType = {
+  REALTIME: Symbol('REALTIME'),
+  ASYNC: Symbol('ASYNC'),
+};
+
 module.exports.RoomVisibility = {
   PUBLIC: Symbol('PUBLIC'),
   PRIVATE: Symbol('PRIVATE'),

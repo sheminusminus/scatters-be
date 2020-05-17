@@ -5,7 +5,7 @@ const createPlayer = require('./playerPresence');
 
 const SETS_PER_ROUND = 12;
 
-const { GamePhase } = require('./constants');
+const { GamePhase, GameType } = require('./constants');
 
 
 module.exports = class Game {
@@ -15,6 +15,7 @@ module.exports = class Game {
     this.playersAway = new Set();
     this.room = roomName;
     this.phaseListeners = {};
+    this.type = GameType.REALTIME;
 
     this.addPlayer = this.addPlayer.bind(this);
     this.calculateScores = this.calculateScores.bind(this);
