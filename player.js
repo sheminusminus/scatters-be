@@ -35,12 +35,41 @@ class Player {
 
     this.currentRoom = null;
 
+    this._rooms = new Set();
+
     this._roomOrdinals = {};
     this._roomIsTurns = {};
     this._roomAnswers = {};
     this._roomSetScores = {};
     this._roomRoundScores = {};
     this._roomScores = {};
+    this._roomGameStatus = new Map();
+  }
+
+  get rooms() {
+    return Array.from(this._rooms);
+  }
+
+  get roomGameStatus() {
+    return this._roomGameStatus;
+  }
+
+  getRoomGameStatus(roomName) {
+    this._roomGameStatus.get(roomName);
+  }
+
+  setRoomGameStatus(roomName, status) {
+    this._roomGameStatus.set(roomName, status);
+  }
+
+  setRoomGameStatusPhase(roomName, phase) {
+    const status = this.getRoomGameStatus(roomName) || {};
+    status.phase = phase;
+    this.setRoomGameStatus(roomName, status);
+  }
+
+  joinedRoom(room) {
+    this._rooms.add(room);
   }
 
   getCurrentRoom() {

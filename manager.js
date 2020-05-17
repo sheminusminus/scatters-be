@@ -1,6 +1,8 @@
-const shortId = require('shortid');
-
 const Room = require('./room');
+
+const getOrCreatePlayer = require('./playerPresence');
+
+const { RoomVisibility } = require('./constants');
 
 
 module.exports = class Manager {
@@ -22,8 +24,22 @@ module.exports = class Manager {
     this.allPlayersSeen.add(username);
   }
 
-  listAllRooms() {
-    return this.state.map((room) => room.getData(true));
+  getAllRooms(includePrivate = true) {
+    if (includePrivate) {
+      return this.state;
+    }
+
+    return this.state.filter((room) => room.visibility === RoomVisibility.PUBLIC);
+  }
+
+  listAllRooms(includePrivate = false) {
+    const allRooms = this.state.map((room) => room.getData(true));
+
+    if (includePrivate) {
+      return allRooms;
+    }
+
+    return allRooms.filter((room) => room.visibility === RoomVisibility.PUBLIC);
   }
 
   listRoomsExcluding(excludedRooms = []) {
@@ -47,9 +63,10 @@ module.exports = class Manager {
     return undefined;
   }
 
-  createRoom(io, name) {
-    const roomId = shortId.generate();
-    const room = new Room(io, name, roomId);
+  createRoom(params) {
+    const { name } = params;
+
+    const room = new Room(params);
 
     this.rooms.set(name, room);
 
@@ -71,18 +88,43 @@ module.exports = class Manager {
     }).map((room) => room.getData(true));
   }
 
+  findOrCreatePlayer(username) {
+    const player = getOrCreatePlayer(username);
+    this.recordPlayer(username);
+    return player;
+  }
+
   addPlayerToRoom(roomName, username) {
     const room = this.findRoom(roomName);
-    const player = room.addPlayer(username);
-    this.presence.addUser(player);
-    this.rooms.set(roomName, room);
-    return player;
+
+    let player;
+
+    if (room) {
+      player = room.addPlayer(username);
+    } else {
+      player = getOrCreatePlayer(username);
+    }
+
+    if (player) {
+      this.presence.addUser(player);
+
+      if (room) {
+        this.rooms.set(roomName, room);
+      }
+
+      return player;
+    }
+
+    return false;
   }
 
   removePlayerFromRoom(roomName, username) {
     const room = this.findRoom(roomName);
-    room.removePlayer(username);
-    this.rooms.set(roomName, room);
+
+    if (room) {
+      room.removePlayer(username);
+      this.rooms.set(roomName, room);
+    }
   }
 
   setPlayerOffline() {
@@ -91,16 +133,22 @@ module.exports = class Manager {
 
   getPlayersAway(roomName) {
     const room = this.findRoom(roomName);
-    room.getPlayersAway();
+    if (room) {
+      room.getPlayersAway();
+    }
   }
 
   setPlayerAway(roomName, username) {
     const room = this.findRoom(roomName);
-    room.setPlayerAway(username);
+    if (room) {
+      room.setPlayerAway(username);
+    }
   }
 
   setPlayerBack(roomName, username) {
     const room = this.findRoom(roomName);
-    room.setPlayerBack(username);
+    if (room) {
+      room.setPlayerBack(username);
+    }
   }
 };

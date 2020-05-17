@@ -5,6 +5,8 @@ const Player = require('./player');
 
 const IGNORE_PROPS = ['isOnline', 'lastSeen'];
 
+const players = new Map();
+
 const onChange = (object, onChange) => {
   const handler = {
     set(target, property, value) {
@@ -22,6 +24,10 @@ const onChange = (object, onChange) => {
 };
 
 module.exports = (username) => {
+  if (players.has(username)) {
+    return players.get(username);
+  }
+
   const player = new Player(username);
 
   const handleChange = (property, value) => {
@@ -34,5 +40,9 @@ module.exports = (username) => {
     }
   };
 
-  return onChange(player, handleChange);
+  const watchedPlayer = onChange(player, handleChange);
+
+  players.set(username, watchedPlayer);
+
+  return watchedPlayer;
 };
