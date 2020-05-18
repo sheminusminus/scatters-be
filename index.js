@@ -119,6 +119,7 @@ const handleRoomJoined = (socket, username, roomName) => () => {
     allRooms,
     currentList: room && room.getRound(),
     joinedRooms,
+    phase: room && room.getPhase(username),
     players: room && room.state,
     room: room && room.name,
     username: username,
@@ -137,13 +138,16 @@ const makeHandleReconnectionEvent = (socket, player) => (attemptNumber) => {
   console.log('socket reconnecting at attempt number:', attemptNumber);
 };
 
-const makeHandleDisconnect = (socket, player) => (reason) => {
+const makeHandleDisconnect = (socket, username) => (reason) => {
   console.log('socket disconnected:', reason);
-  player.setIsOnline(false);
+  const player = manager.findOrCreatePlayer(username);
+  if (player) {
+    player.setIsOnline(false);
+  }
 };
 
 const getJoinRoomArtifacts = (socket, roomName, username) => {
-  const handleGetStatus = makeHandleGetStatus(socket);
+  const handleGetStatus = makeHandleGetStatus(socket, username);
   const player = manager.addPlayerToRoom(roomName, username);
   const handleJoinRoom = handleRoomJoined(socket, username, roomName);
   return { handleGetStatus, handleJoinRoom, player };
@@ -174,7 +178,7 @@ const makeHandleRoom = (socket) => (data) => {
     } = getJoinRoomArtifacts(socket, roomName, username);
 
     if (player) {
-      const handleDisconnect = makeHandleDisconnect(socket, player);
+      const handleDisconnect = makeHandleDisconnect(socket, username);
       socket.join(foundRoom.name, handleJoinRoom);
       socket.on('disconnect', handleDisconnect);
       foundRoom.registerPhaseListener(username, handleGetStatus);
@@ -199,6 +203,7 @@ const makeHandleListRooms = (socket) => (data) => {
 
 const makeHandleName = (socket) => (data) => {
   const handleListRooms = makeHandleListRooms(socket);
+  const handleGetStatus = makeHandleGetStatus(socket);
 
   const { username, pushToken } = data;
 
@@ -207,6 +212,8 @@ const makeHandleName = (socket) => (data) => {
   if (pushToken) {
     notifs.setToken(username, pushToken);
   }
+
+  socket.on(events.GET_STATUS, handleGetStatus);
 
   handleListRooms(data);
 };
@@ -225,14 +232,36 @@ const makeHandleStartGame = (socket) => (data) => {
   }
 };
 
-const handleTimerFire = (roomName) => (timeLeft) => {
+const handleTimerFire = (socket, roomName) => (timeLeft) => {
   const room = $room(roomName);
 
+  const { username } = socket.scatters;
+
   if (room) {
+    const startTime = room.getStart(username);
+    const endTime = room.getEnd(username);
+
+    if (room.type === RoomType.ASYNC) {
+      socket.emit(events.TIMER_FIRED, {
+        timeLeft,
+        startTime,
+        endTime,
+        room: roomName,
+      });
+
+      if (timeLeft <= 0) {
+        socket.emit(events.ROUND_ENDED, {
+          room: roomName,
+        });
+      }
+
+      return;
+    }
+
     scatters.to(room.name).emit(events.TIMER_FIRED, {
       timeLeft,
-      startTime: room.start,
-      endTime: room.end,
+      startTime,
+      endTime,
     });
 
     if (timeLeft <= 0) {
@@ -241,20 +270,31 @@ const handleTimerFire = (roomName) => (timeLeft) => {
   }
 };
 
-const handleStartRound = (data) => {
+const makeHandleStartRound = (socket) => (data) => {
   const { room: roomName } = data;
+  const { username } = socket.scatters;
 
-  const timerFired = handleTimerFire(roomName);
+  const timerFired = handleTimerFire(socket, roomName);
 
   const room = $room(roomName);
 
   if (room) {
-    room.startTimer(timerFired);
+    room.startTimer(timerFired, username);
 
-    scatters.to(room.name).emit(events.ROUND_STARTED, {
-      startTime: room.start,
-      endTime: room.end,
-    });
+    const startTime = room.getStart(username);
+    const endTime = room.getEnd(username);
+
+    if (room.type === RoomType.ASYNC) {
+      socket.emit(events.ROUND_STARTED, {
+        startTime,
+        endTime,
+      });
+    } else {
+      scatters.to(room.name).emit(events.ROUND_STARTED, {
+        startTime,
+        endTime,
+      });
+    }
   }
 };
 
@@ -358,6 +398,7 @@ const makeHandleSetRound = (socket) => (data) => {
 
 const makeHandleGetStatus = (socket) => (data) => {
   const { room: roomName } = data;
+  const { username } = socket.scatters;
 
   const room = $room(roomName);
 
@@ -365,7 +406,7 @@ const makeHandleGetStatus = (socket) => (data) => {
     const activePlayer = room.activePlayer;
     const currentList = room.getRound();
     const inProgress = room.gameInProgress;
-    const phase = room.phase;
+    const phase = room.getPhase(username);
     const players = room.state;
     const roll = room.dice.value;
     const roundInProgress = room.roundInProgress;
@@ -461,7 +502,7 @@ const makeHandleCreateRoom = (socket) => (data) => {
     } = getJoinRoomArtifacts(socket, newRoom.name, username);
 
     if (player) {
-      const handleDisconnect = makeHandleDisconnect(socket, player);
+      const handleDisconnect = makeHandleDisconnect(socket, username);
       socket.join(newRoom.name, handleJoinRoom);
       socket.on('disconnect', handleDisconnect);
       newRoom.registerPhaseListener(username, handleGetStatus);
@@ -489,13 +530,13 @@ const handleConnection = (socket) => {
   const handleSendAnswers = makeHandleSendAnswers(socket);
   const handleSendTallies = makeHandleSendTallies(socket);
   const handleNextRound = makeHandleNextRound(socket);
-  const handleGetStatus = makeHandleGetStatus(socket);
   const handleSetRound = makeHandleSetRound(socket);
   const handleExitRoom = makeHandleExitRoom(socket);
   const handleGetAllPlayers = makeHandleGetAllPlayers(socket);
   const handlePushMessage = makeHandleSendPushMessage(socket);
   const handleCreateRoom = makeHandleCreateRoom(socket);
   const handleListRooms = makeHandleListRooms(socket);
+  const handleStartRound = makeHandleStartRound(socket);
 
   socket.on(events.EMIT_NAME, handleName);
 
@@ -514,8 +555,6 @@ const handleConnection = (socket) => {
   socket.on(events.SEND_TALLIES, handleSendTallies);
 
   socket.on(events.NEXT_ROUND, handleNextRound);
-
-  socket.on(events.GET_STATUS, handleGetStatus);
 
   socket.on(events.SET_ROUND, handleSetRound);
 

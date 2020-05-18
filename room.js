@@ -13,8 +13,7 @@ module.exports = class Room {
       visibility = RoomVisibility.PUBLIC,
     } = params;
 
-    this.io = io;
-    this.game = new Game(this.io.to(this.name), name);
+    this.game = new Game(io, name);
     this.name = name;
 
     this._visibility = visibility;
@@ -52,8 +51,12 @@ module.exports = class Room {
     return this._type;
   }
 
-  get phase() {
-    return this.game.phase;
+  // get phase() {
+  //   return this.game.phase;
+  // }
+
+  getPhase() {
+    return this.game.getPhase();
   }
 
   get activePlayer() {
@@ -68,12 +71,12 @@ module.exports = class Room {
     return this.game.gameInProgress;
   }
 
-  get start() {
-    return this.game.startTime;
+  getStart() {
+    return this.game.getStartTime();
   }
 
-  get end() {
-    return this.game.endTime;
+  getEnd() {
+    return this.game.getEndTime();
   }
 
   get dice() {
