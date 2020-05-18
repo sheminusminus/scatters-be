@@ -9,8 +9,8 @@ const { GamePhase, GameType } = require('./constants');
 
 
 module.exports = class Game {
-  constructor(io, roomName) {
-    this.io = io;
+  constructor(emitter, roomName) {
+    this.emitter = emitter;
     this.players = new Map();
     this.playersAway = new Set();
     this.room = roomName;
@@ -371,7 +371,7 @@ module.exports = class Game {
       this.phase = GamePhase.VOTE;
     }
 
-    this.io.to(this.room).emit('round-ended', { round: this.round });
+    emitter.emit('round-ended', { round: this.round });
   }
 
   talliesToScores(tallies, done) {

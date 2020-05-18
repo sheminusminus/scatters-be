@@ -91,9 +91,17 @@ const notifs = new Notifs();
 
 manager.createRoom({
   io: scatters,
-  name: 'default',
+  name: 'Default',
   creator: SYSTEM_USERNAME,
   type: RoomType.REALTIME,
+  visibility: RoomVisibility.PUBLIC,
+});
+
+manager.createRoom({
+  io: scatters,
+  name: 'DefaultAsync',
+  creator: SYSTEM_USERNAME,
+  type: RoomType.ASYNC,
   visibility: RoomVisibility.PUBLIC,
 });
 
@@ -425,24 +433,25 @@ const makeHandleSendPushMessage = (socket) => (data) => {
 };
 
 const makeHandleCreateRoom = (socket) => (data) => {
-  console.log(1, 'request to create a new room: ', data);
   const { visibility, type, room: roomName, username } = data;
 
-  const existingRoom = $room(roomName);
+  const roomType = RoomType[type];
+  const roomVis = RoomVisibility[visibility];
+
+  const existingRoom = $room(roomName) || $room(roomName.toLowerCase()) || $room(roomName.toUpperCase());
 
   if (existingRoom) {
-    console.log('room exists: ', roomName);
     socket.emit(events.ROOM_CREATED_ERROR, {
+      title: 'Cannot create room',
       message: 'This room name is already taken. Be more creative.',
     });
   } else {
-    console.log('room does not exist: ', roomName);
     const newRoom = manager.createRoom({
       io: scatters,
       name: roomName,
       creator: username,
-      type,
-      visibility: RoomVisibility[visibility],
+      type: roomType,
+      visibility: roomVis,
     });
 
     const {
@@ -450,8 +459,6 @@ const makeHandleCreateRoom = (socket) => (data) => {
       handleJoinRoom,
       player,
     } = getJoinRoomArtifacts(socket, newRoom.name, username);
-
-    console.log('player: ', player);
 
     if (player) {
       const handleDisconnect = makeHandleDisconnect(socket, player);
@@ -462,6 +469,7 @@ const makeHandleCreateRoom = (socket) => (data) => {
     } else {
       manager.deleteRoom(roomName);
       socket.emit(events.ROOM_CREATED_ERROR, {
+        title: 'Cannot create room',
         message: 'Something weird going on probably.',
       });
     }

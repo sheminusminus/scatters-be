@@ -13,7 +13,8 @@ module.exports = class Room {
       visibility = RoomVisibility.PUBLIC,
     } = params;
 
-    this.game = new Game(io, name);
+    this.io = io;
+    this.game = new Game(this.io.to(this.name), name);
     this.name = name;
 
     this._visibility = visibility;

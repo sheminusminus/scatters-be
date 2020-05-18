@@ -1,8 +1,9 @@
 const Room = require('./room');
+const RoomAsync = require('./roomAsync');
 
 const getOrCreatePlayer = require('./playerPresence');
 
-const { RoomVisibility } = require('./constants');
+const { RoomType, RoomVisibility } = require('./constants');
 
 
 module.exports = class Manager {
@@ -64,9 +65,15 @@ module.exports = class Manager {
   }
 
   createRoom(params) {
-    const { name } = params;
+    const { name, type } = params;
 
-    const room = new Room(params);
+    let room;
+
+    if (type === RoomType.ASYNC) {
+      room = new RoomAsync(params);
+    } else {
+      room = new Room(params);
+    }
 
     this.rooms.set(name, room);
 
@@ -112,7 +119,7 @@ module.exports = class Manager {
         this.rooms.set(roomName, room);
       }
 
-      return player;
+      return player.getDataForRoom(roomName, true);
     }
 
     return false;
