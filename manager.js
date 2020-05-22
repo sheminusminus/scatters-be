@@ -25,6 +25,24 @@ module.exports = class Manager {
     this.allPlayersSeen.add(username);
   }
 
+  getChatMessages(roomName) {
+    const room = this.findRoom(roomName);
+
+    if (room) {
+      room.getChatMessages();
+    }
+
+    return [];
+  }
+
+  sendChatMessage(roomName, from, text, tokens) {
+    const room = this.findRoom(roomName);
+
+    if (room) {
+      room.sendChatMessage(from, text, tokens);
+    }
+  }
+
   getAllRooms(includePrivate = true) {
     if (includePrivate) {
       return this.state;

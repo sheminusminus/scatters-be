@@ -1,3 +1,9 @@
+module.exports.MessageStatus = {
+  DELIVERED: 'DELIVERED',
+  FAILED: 'FAILED',
+  QUEUED: 'QUEUED',
+};
+
 module.exports.GamePhase = {
   NOT_STARTED: 'NOT_STARTED',
   ROLL: 'ROLL',

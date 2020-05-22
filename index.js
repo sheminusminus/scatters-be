@@ -1,8 +1,13 @@
 require('dotenv').config();
 
 const express = require('express');
+const cookieParser = require('cookie-parser');
+const bodyParser = require('body-parser');
 
 const app = express();
+app.use(bodyParser.json());
+app.use(cookieParser());
+app.use(bodyParser.urlencoded({ extended: false }));
 
 const server = require('http').Server(app);
 const io = require('socket.io')(server);
@@ -14,6 +19,7 @@ const Manager = require('./manager');
 const Presence = require('./presence');
 const Invitations = require('./invitations');
 const Notifs = require('./notifs');
+const tokens = require('./tokens');
 
 const { RoomType, RoomVisibility } = require('./constants');
 
@@ -26,7 +32,6 @@ const listener = server.listen(process.env.PORT, () => {
 });
 
 const logsOff = false;
-
 if (logsOff) {
   const originalLog = console.log;
   console.log = (...args) => {
@@ -35,6 +40,13 @@ if (logsOff) {
     }
   };
 }
+
+const chatEvents = {
+  CHAT_MESSAGE: '@chat/CHAT_MESSAGE',
+  MESSAGE_SENT: '@chat/MESSAGE_SENT',
+  MESSAGES_REQUESTED: '@chat/MESSAGES_REQUESTED',
+  SEND_MESSAGE: '@chat/SEND_MESSAGE',
+};
 
 const events = {
   CONNECT: 'connect',
@@ -210,7 +222,14 @@ const makeHandleName = (socket) => (data) => {
   manager.recordPlayer(username);
 
   if (pushToken) {
-    notifs.setToken(username, pushToken);
+    tokens.setToken(username, pushToken);
+    // notifs.setToken(username, pushToken);
+  }
+
+  if (username) {
+    socket.join(username, () => {
+      console.log(`${username}'s socket has joined:`, socket.rooms);
+    });
   }
 
   socket.on(events.GET_STATUS, handleGetStatus);
@@ -452,7 +471,10 @@ const makeHandleGetAllPlayers = (socket) => (data) => {
 
 const handleSetPushToken = (data) => {
   const { username, token } = data;
-  notifs.setToken(username, token);
+  // notifs.setToken(username, token);
+  if (username && token) {
+    tokens.setToken(username, token);
+  }
 };
 
 const makeHandleSendPushMessage = (socket) => (data) => {
@@ -517,6 +539,12 @@ const makeHandleCreateRoom = (socket) => (data) => {
   }
 };
 
+const makeHandleSendChatMessage = (socket) => (data) => {
+  const { username, room, text } = data;
+  console.log('chat message: ', data);
+  socket.to(room).emit(chatEvents.CHAT_MESSAGE, { username, room, text });
+};
+
 const handleConnection = (socket) => {
   const middleware = createSocketMiddleware(socket, manager);
 
@@ -537,6 +565,7 @@ const handleConnection = (socket) => {
   const handleCreateRoom = makeHandleCreateRoom(socket);
   const handleListRooms = makeHandleListRooms(socket);
   const handleStartRound = makeHandleStartRound(socket);
+  const handleSendChatMessage = makeHandleSendChatMessage(socket);
 
   socket.on(events.EMIT_NAME, handleName);
 
@@ -569,6 +598,8 @@ const handleConnection = (socket) => {
   socket.on(events.CREATE_ROOM, handleCreateRoom);
 
   socket.on(events.LIST_ROOMS, handleListRooms);
+
+  socket.on(chatEvents.SEND_MESSAGE, handleSendChatMessage);
 };
 
 scatters.on('connection', handleConnection);

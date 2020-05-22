@@ -1,4 +1,5 @@
 const Game = require('./game');
+const Chat = require('./chat');
 
 const { RoomType, RoomVisibility } = require('./constants');
 
@@ -15,6 +16,7 @@ module.exports = class Room {
 
     this.game = new Game(io, name);
     this.name = name;
+    this.chat = new Chat(this.name);
 
     this._visibility = visibility;
     this._type = type;
@@ -51,14 +53,6 @@ module.exports = class Room {
     return this._type;
   }
 
-  // get phase() {
-  //   return this.game.phase;
-  // }
-
-  getPhase() {
-    return this.game.getPhase();
-  }
-
   get activePlayer() {
     return this.game.activePlayer;
   }
@@ -71,14 +65,6 @@ module.exports = class Room {
     return this.game.gameInProgress;
   }
 
-  getStart() {
-    return this.game.getStartTime();
-  }
-
-  getEnd() {
-    return this.game.getEndTime();
-  }
-
   get dice() {
     return this.game.dice;
   }
@@ -89,6 +75,26 @@ module.exports = class Room {
 
   get state() {
     return this.game.state.map((player) => player.getDataForRoom(this.name, true));
+  }
+
+  sendChatMessage(from, text, tokens) {
+    this.chat.addMessage(from, text, tokens);
+  }
+
+  getChatMessages() {
+    this.chat.getTranscript();
+  }
+
+  getPhase() {
+    return this.game.getPhase();
+  }
+
+  getStart() {
+    return this.game.getStartTime();
+  }
+
+  getEnd() {
+    return this.game.getEndTime();
   }
 
   playerInvited(username, invitedBy) {
@@ -177,6 +183,8 @@ module.exports = class Room {
         return false;
       }
     }
+
+    this.chat.addPlayer(username);
 
     return this.game.addPlayer(username).getDataForRoom(this.name);
   }

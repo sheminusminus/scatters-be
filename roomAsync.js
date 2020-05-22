@@ -1,4 +1,5 @@
 const AsyncGame = require('./asyncGame');
+const Chat = require('./chat');
 
 const { RoomType, RoomVisibility } = require('./constants');
 
@@ -15,6 +16,7 @@ module.exports = class Room {
 
     this.game = new AsyncGame(io, name);
     this.name = name;
+    this.chat = new Chat(this.name);
 
     this._visibility = visibility;
     this._type = type;
@@ -85,6 +87,14 @@ module.exports = class Room {
 
   get state() {
     return this.game.state.map((player) => player.getDataForRoom(this.name, true));
+  }
+
+  sendChatMessage(from, text, tokens) {
+    this.chat.addMessage(from, text, tokens);
+  }
+
+  getChatMessages() {
+    this.chat.getTranscript();
   }
 
   playerInvited(username, invitedBy) {
