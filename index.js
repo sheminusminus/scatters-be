@@ -109,13 +109,13 @@ manager.createRoom({
   visibility: RoomVisibility.PUBLIC,
 });
 
-manager.createRoom({
-  io: scatters,
-  name: 'DefaultAsync',
-  creator: SYSTEM_USERNAME,
-  type: RoomType.ASYNC,
-  visibility: RoomVisibility.PUBLIC,
-});
+// manager.createRoom({
+//   io: scatters,
+//   name: 'DefaultAsync',
+//   creator: SYSTEM_USERNAME,
+//   type: RoomType.ASYNC,
+//   visibility: RoomVisibility.PUBLIC,
+// });
 
 const $room = (roomName) => manager.findRoom(roomName);
 
