@@ -1,4 +1,4 @@
-const Game = require('./game');
+const AsyncGame = require('./asyncGame');
 const Chat = require('./chat');
 
 const { RoomType, RoomVisibility } = require('./constants');
@@ -10,11 +10,11 @@ module.exports = class Room {
       io,
       name,
       creator,
-      type = RoomType.REALTIME,
+      type = RoomType.ASYNC,
       visibility = RoomVisibility.PUBLIC,
     } = params;
 
-    this.game = new Game(io, name);
+    this.game = new AsyncGame(io, name);
     this.name = name;
     this.chat = new Chat(this.name);
 
@@ -53,6 +53,10 @@ module.exports = class Room {
     return this._type;
   }
 
+  getPhase(username) {
+    return this.game.getPhase(username);
+  }
+
   get activePlayer() {
     return this.game.activePlayer;
   }
@@ -63,6 +67,14 @@ module.exports = class Room {
 
   get gameInProgress() {
     return this.game.gameInProgress;
+  }
+
+  getStart(username) {
+    return this.game.getStartTime(username);
+  }
+
+  getEnd(username) {
+    return this.game.getEndTime(username);
   }
 
   get dice() {
@@ -83,18 +95,6 @@ module.exports = class Room {
 
   getChatMessages() {
     this.chat.getTranscript();
-  }
-
-  getPhase() {
-    return this.game.getPhase();
-  }
-
-  getStart() {
-    return this.game.getStartTime();
-  }
-
-  getEnd() {
-    return this.game.getEndTime();
   }
 
   playerInvited(username, invitedBy) {
@@ -120,7 +120,7 @@ module.exports = class Room {
   }
 
   setPlayerAway(username) {
-   this.game.setPlayerAway(username);
+    this.game.setPlayerAway(username);
   }
 
   setPlayerBack(username) {
@@ -173,8 +173,8 @@ module.exports = class Room {
     return this.game.startGame();
   }
 
-  startTimer(callback) {
-    return this.game.startTimer(callback);
+  startTimer(callback, username) {
+    return this.game.startTimer(callback, username);
   }
 
   addPlayer(username) {
@@ -183,8 +183,6 @@ module.exports = class Room {
         return false;
       }
     }
-
-    this.chat.addPlayer(username);
 
     return this.game.addPlayer(username).getDataForRoom(this.name);
   }

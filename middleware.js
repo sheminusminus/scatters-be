@@ -4,12 +4,18 @@ module.exports = (socket, manager) => ([event, data], next) => {
   if (data) {
     if (data.username) {
       socket.scatters.username = data.username;
+      if (!socket.rooms || !socket.rooms[data.username]) {
+        socket.join(data.username);
+      }
     }
     if (data.room) {
       socket.scatters.room = data.room;
+      if (!socket.rooms || !socket.rooms[data.room]) {
+        socket.join(data.room);
+      }
     }
   }
 
-  console.log(socket.scatters);
+  console.log(socket.scatters, socket.rooms);
   return next();
 };

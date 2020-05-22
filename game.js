@@ -70,13 +70,13 @@ module.exports = class Game {
     return [...this.players.values()].length;
   }
 
-  get phase() {
+  getPhase() {
     return this._phase;
   }
 
-  set phase(val) {
+  setPhase(phase) {
     this._lastPhase = this._phase;
-    this._phase = val;
+    this._phase = phase;
 
     if (this._lastPhase !== this._phase) {
       Object.keys(this.phaseListeners).forEach((key) => {
@@ -95,11 +95,11 @@ module.exports = class Game {
     return [...this.players.keys()];
   }
 
-  get startTime() {
+  getStartTime() {
     return this.timer.startTime;
   }
 
-  get endTime() {
+  getEndTime() {
     return this.timer.endTime;
   }
 
@@ -192,7 +192,8 @@ module.exports = class Game {
     this.gameInProgress = false;
     this.roundInProgress = false;
     this.roundTallies = 0;
-    this.phase = GamePhase.ROLL;
+    // this.phase = GamePhase.ROLL;
+    this.setPhase(GamePhase.ROLL);
 
     this.round += 1;
 
@@ -260,7 +261,9 @@ module.exports = class Game {
   }
 
   rollDice() {
-    this.phase = GamePhase.ROLL;
+    // this.phase = GamePhase.ROLL;
+    this.setPhase(GamePhase.ROLL);
+
     return this.dice.roll();
   }
 
@@ -315,7 +318,7 @@ module.exports = class Game {
   }
 
   setRound(round) {
-    if (this.phase !== GamePhase.LIST) {
+    if (this.getPhase() !== GamePhase.LIST) {
       this.round = round;
     }
 
@@ -343,13 +346,16 @@ module.exports = class Game {
 
   startGame() {
     this.gameInProgress = true;
-    this.phase = GamePhase.ROLL;
+    // this.phase = GamePhase.ROLL;
+    this.setPhase(GamePhase.ROLL);
 
     return this;
   }
 
   startTimer(done) {
-    this.phase = GamePhase.LIST;
+    // this.phase = GamePhase.LIST;
+    this.setPhase(GamePhase.LIST);
+
     this.roundInProgress = true;
 
     this.timer.start((timeLeft) => {
@@ -366,9 +372,11 @@ module.exports = class Game {
 
   afterStopTimer() {
     if (this.numPlayers === 0) {
-      this.phase = GamePhase.NOT_STARTED;
+      // this.phase = GamePhase.NOT_STARTED;
+      this.setPhase(GamePhase.NOT_STARTED);
     } else {
-      this.phase = GamePhase.VOTE;
+      // this.phase = GamePhase.VOTE;
+      this.setPhase(GamePhase.VOTE);
     }
 
     this.io.to(this.room).emit('round-ended', { round: this.round });
@@ -380,7 +388,8 @@ module.exports = class Game {
     this.roundTallies += 1;
 
     if (this.roundTallies === this.numPlayers) {
-      this.phase = GamePhase.SCORES;
+      // this.phase = GamePhase.SCORES;
+      this.setPhase(GamePhase.SCORES);
 
       this.calculateScores();
 
