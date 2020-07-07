@@ -161,6 +161,10 @@ module.exports = class Room {
     return this.game.setRound(round);
   }
 
+  getListItems() {
+    return this.game.getListItems();
+  }
+
   nextRound() {
     return this.game.nextRound();
   }

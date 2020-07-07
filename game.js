@@ -6,6 +6,7 @@ const createPlayer = require('./playerPresence');
 const SETS_PER_ROUND = 12;
 
 const { GamePhase, GameType } = require('./constants');
+const lists = require('./lists');
 
 
 module.exports = class Game {
@@ -169,6 +170,11 @@ module.exports = class Game {
 
   getRound() {
     return this.round;
+  }
+
+  getListItems() {
+    const round = this.getRound();
+    return lists.slice(round * 12, (round + 1) * 12);
   }
 
   init() {
