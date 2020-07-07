@@ -1,6 +1,6 @@
-const TIMER_MIN = 3;
+// const TIMER_MIN = 3;
 // const TIMER_MIN = 0.5;
-// const TIMER_MIN = 0.2;
+const TIMER_MIN = 0.2;
 const TIMER_LEN = TIMER_MIN * 60 * 1000;
 const TIMER_INTERVAL = 250;
 

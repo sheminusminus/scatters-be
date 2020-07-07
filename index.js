@@ -131,6 +131,7 @@ const handleRoomJoined = (socket, username, roomName) => () => {
     allRooms,
     currentList: room && room.getRound(),
     joinedRooms,
+    listItems: (room && room.getListItems()) || [],
     phase: room && room.getPhase(username),
     players: room && room.state,
     room: room && room.name,
@@ -140,6 +141,7 @@ const handleRoomJoined = (socket, username, roomName) => () => {
   socket.to(roomName).emit(events.PLAYERS_UPDATED, {
     activePlayer: room && room.activePlayer,
     currentList: room && room.getRound(),
+    listItems: (room && room.getListItems()) || [],
     players: room && room.state,
     room: room && room.name,
     username: username,
@@ -410,6 +412,7 @@ const makeHandleSetRound = (socket) => (data) => {
     scatters.to(room.name).emit(events.ROUND_SET, {
       activePlayer: room.activePlayer,
       currentList: room.getRound(),
+      listItems: room.getListItems(),
       players: room.state,
     });
   }
@@ -424,6 +427,7 @@ const makeHandleGetStatus = (socket) => (data) => {
   if (room) {
     const activePlayer = room.activePlayer;
     const currentList = room.getRound();
+    const listItems = room.getListItems();
     const inProgress = room.gameInProgress;
     const phase = room.getPhase(username);
     const players = room.state;
@@ -434,6 +438,7 @@ const makeHandleGetStatus = (socket) => (data) => {
       activePlayer,
       currentList,
       inProgress,
+      listItems,
       phase,
       players,
       roll,
